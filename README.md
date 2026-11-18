@@ -169,6 +169,18 @@ JB="path/to/jdk/bin"; PL="path/to/android-34/android.jar"
 
 特别感谢 AOSP 与 Google 的 `CallScreeningService` / `ContactsContract.Directory` 文档——虽然三星原生「电话」不查第三方目录（见[已知限制](#已知限制)），但 Android 至少留了这条官方通道。
 
+## 版权与许可
+
+```
+Copyright (C) 2026 冯志佳 <https://github.com/fzj6394>
+```
+
+本项目（源码 + 内置黄页 `assets/yellow.txt`）以 **GPL-3.0** 发布，全文见 [LICENSE](LICENSE)。
+
+`LICENSE` 保持 GPL 原文未做任何改动——加版权头会让 GitHub 的协议识别退化成 `NOASSERTION`，所以版权声明放在这里。
+
+第三方数据各自的版权归原作者：归属地号段库来自 [xluohome/phonedata](https://github.com/xluohome/phonedata)（GPL-3.0），骚扰号段来自 [vlongen/BanHarassment](https://github.com/vlongen/BanHarassment)。
+
 ## 更新日志
 
 - **v2.5** 黄页扩到 116 条（航空 25 / 快递 18 / 国际快递 4），加种子版本号让老用户自动补导
