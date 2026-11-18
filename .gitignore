@@ -1,0 +1,23 @@
+# 构建产物
+build/
+*.apk
+*.zip
+*.log
+
+# 签名材料：绝对不能进仓库
+keystore/*.jks
+keystore/pass.txt
+*.keystore
+
+# 第三方数据：GPL-3，构建时用 tools/fetch-data.sh 下载，不入库
+assets/phone.dat
+
+# 发布用临时目录
+dist/
+icon-src/
+
+# 内部交接笔记（含本地路径，不公开）
+项目状态.md
+
+# 签名产生的临时文件
+*.idsig

@@ -1,0 +1,262 @@
+package cn.fzj.callersentry;
+
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.telecom.Call;
+import android.telecom.CallScreeningService;
+
+/**
+ * 来电识别与拦截的核心。
+ *
+ * 时延上的三条硬规矩（v2.3）：
+ * 1. 本地判定全部走内存（黄页 Map、号码库、设置快照），不碰磁盘、不联网；
+ * 2. **判定完立刻 respondToCall**，系统才推来电界面，慢活儿一律放后面；
+ * 3. 归属地库还没加载完（冷启动）就不等它：先显示号码，加载完再补文字。
+ */
+public class ScreeningService extends CallScreeningService {
+
+    static final String CHANNEL = "caller_id";
+    private static final int MODE_TIP = 0;
+    private static final int MODE_SILENCE = 1;
+    private static final int MODE_REJECT = 2;
+
+    @Override
+    public void onScreenCall(Call.Details details) {
+        final long t0 = System.nanoTime();
+        boolean responded = false;
+        try {
+            if (details.getCallDirection() != Call.Details.DIRECTION_INCOMING) {
+                respondToCall(details, new CallResponse.Builder().build());
+                return;
+            }
+
+            Uri handle = details.getHandle();
+            String raw = handle == null ? null : handle.getSchemeSpecificPart();
+            String digits = NumUtil.clean(raw);
+            if (digits.length() == 0) {
+                respondToCall(details, new CallResponse.Builder().build());
+                return;
+            }
+
+            // ---------- 1. 本地判定：纯内存 ----------
+            String exactHit = Blacklist.matchExact(this, digits);
+            String yellow = Yellow.label(this, digits);
+            String mark = null;
+            boolean spam = false;
+
+            if (exactHit != null) {
+                mark = "我的号码库";
+                spam = true;
+            } else if (yellow != null) {
+                mark = yellow;
+            } else {
+                String ruleHit = Blacklist.match(this, digits);
+                if (ruleHit != null) {
+                    mark = "我的号码库";
+                    spam = true;
+                } else {
+                    mark = MarkCache.get(this, digits);
+                    spam = mark != null;
+                }
+            }
+
+            int mode = Prefs.blockMode(this);
+            boolean repeat = isRepeatSoon(digits);
+            remember(digits);
+            final long tLocal = System.nanoTime();
+
+            // ---------- 2. 立刻 respond ----------
+            CallResponse.Builder b = new CallResponse.Builder();
+            boolean rejected = false;
+            boolean silenced = false;
+            if (spam && !repeat && mode == MODE_REJECT) {
+                b.setDisallowCall(true)
+                        .setRejectCall(true)
+                        .setSilenceCall(false)
+                        .setSkipCallLog(false)
+                        .setSkipNotification(true);
+                rejected = true;
+            } else if (spam && !repeat && mode == MODE_SILENCE) {
+                b.setDisallowCall(false)
+                        .setSilenceCall(true)
+                        .setSkipCallLog(false);
+                silenced = true;
+            }
+            respondToCall(details, b.build());
+            responded = true;
+            final long tResp = System.nanoTime();
+
+            // ---------- 3. 归属地：库没加载完就不等 ----------
+            PhoneLookup lib = PhoneLookup.peek();
+            String area = "";
+            boolean areaPending = false;
+            if (lib != null) {
+                area = describe(raw, digits, lib);
+            } else {
+                areaPending = true;
+                PhoneLookup.warmup(this);
+            }
+            final long tArea = System.nanoTime();
+
+            if (rejected) {
+                LogStore.add(this, digits, area, "已拒接·" + mark);
+                Timing.record(this, digits, ms(t0, tLocal), ms(tLocal, tResp),
+                        ms(tResp, tArea), ms(t0, tArea));
+                return;
+            }
+            if (silenced) {
+                LogStore.add(this, digits, area, "静音放行·" + mark);
+                show(digits, area, mark, true);
+                Timing.record(this, digits, ms(t0, tLocal), ms(tLocal, tResp),
+                        ms(tResp, tArea), ms(t0, tArea));
+                return;
+            }
+
+            if (spam) {
+                LogStore.add(this, digits, area, (repeat ? "重复来电放行·" : "提示·") + mark);
+            } else {
+                LogStore.add(this, digits, area, "提示");
+            }
+            show(digits, area, mark, spam);
+            Timing.record(this, digits, ms(t0, tLocal), ms(tLocal, tResp),
+                    ms(tResp, tArea), ms(t0, tArea));
+
+            // ---------- 4. 冷启动时库还没好：等它好了把文字补上 ----------
+            if (areaPending) {
+                fillAreaLater(digits, mark, spam);
+            }
+
+            // ---------- 5. 在线兜底：异步，只写缓存 ----------
+            if (mark == null && Prefs.onlineOn(this)) {
+                onlineAsync(digits, area);
+            }
+        } catch (Throwable t) {
+            if (!responded) {
+                try {
+                    respondToCall(details, new CallResponse.Builder().build());
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
+    private static String describe(String raw, String digits, PhoneLookup lib) {
+        try {
+            PhoneLookup.Result r = null;
+            if (digits.length() >= 7 && !NumUtil.looksInternational(raw)) {
+                r = lib.lookupMobile(digits);
+            }
+            return NumUtil.describe(raw, digits, r);
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    /** 冷启动期：号段库加载完之后，把归属地补进已显示的悬浮条 */
+    private void fillAreaLater(final String digits, final String mark, final boolean spam) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    PhoneLookup lib = PhoneLookup.get(ScreeningService.this);
+                    String area = describe(null, digits, lib);
+                    if (area == null || area.length() == 0) return;
+                    String[] lines = lines(digits, area, mark);
+                    Overlay.update(lines[0], lines[1]);
+                    LogStore.add(ScreeningService.this, digits, area, "归属地补齐");
+                } catch (Throwable ignored) {
+                }
+            }
+        }, "area-fill").start();
+    }
+
+    /** 本地没命中时的兜底查询：查到就存本地，下次断网也能用 */
+    private void onlineAsync(final String digits, final String area) {
+        final String url = Prefs.onlineUrl(this);
+        if (url == null || url.trim().length() == 0) return;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String online = OnlineLookup.lookup(digits, url, 2500);
+                    if (online != null) {
+                        MarkCache.put(ScreeningService.this, digits, online);
+                        LogStore.add(ScreeningService.this, digits, area, "在线查到 " + online);
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        }, "online-lookup").start();
+    }
+
+    /** 悬浮条两行文字：短号不显示没意义的"归属地" */
+    private static String[] lines(String digits, String area, String mark) {
+        String line1;
+        String line2 = digits;
+        if (mark != null) {
+            line1 = mark;
+            if (area != null && area.length() > 0 && digits.length() >= 7) {
+                line2 = area + "　" + digits;
+            }
+        } else if (area != null && area.length() > 0) {
+            line1 = area;
+        } else {
+            line1 = "来电";
+        }
+        return new String[]{line1, line2};
+    }
+
+    private void show(String digits, String area, String mark, boolean warn) {
+        String[] l = lines(digits, area, mark);
+        if (Prefs.overlayOn(this) && Overlay.canDraw(this)) {
+            Overlay.show(this, l[0], l[1], warn);
+        }
+        if (Prefs.notifyOn(this)) {
+            notifyCaller(l[1], l[0]);
+        }
+    }
+
+    /** 同一号码在设定时间内的再次来电，认为是要紧事，正常响铃 */
+    private boolean isRepeatSoon(String digits) {
+        String lastNum = Prefs.sp(this).getString("last_num", "");
+        long lastTs = Prefs.sp(this).getLong("last_ts", 0L);
+        if (!digits.equals(lastNum)) return false;
+        long gap = System.currentTimeMillis() - lastTs;
+        return gap > 0 && gap < Prefs.repeatMinutes(this) * 60_000L;
+    }
+
+    private void remember(String digits) {
+        Prefs.sp(this).edit().putString("last_num", digits)
+                .putLong("last_ts", System.currentTimeMillis()).apply();
+    }
+
+    private static long ms(long from, long to) {
+        return (to - from) / 1_000_000L;
+    }
+
+    private void notifyCaller(String number, String title) {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification n = new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle(title)
+                .setContentText(number)
+                .setPriority(Notification.PRIORITY_MAX)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .build();
+        try {
+            nm.notify(1001, n);
+        } catch (Throwable ignored) {
+        }
+    }
+}
