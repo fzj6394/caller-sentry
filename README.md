@@ -10,6 +10,10 @@
 
 <p align="center"><img src="docs/icon.png" width="160" alt="图标"></p>
 
+<p align="center">
+  作者 <a href="https://github.com/fzj6394">@fzj6394</a> · 许可 GPL-3.0 · 欢迎提 issue / PR
+</p>
+
 ## 功能
 
 | 模块 | 说明 |
@@ -140,6 +144,30 @@ JB="path/to/jdk/bin"; PL="path/to/android-34/android.jar"
 - 归属地靠号段推断，只精确到市；携号转网后运营商可能不准。
 - 快递员、中介的**个人手机号**无法离线识别，只能靠在线兜底或自己标记。
 - 三星需把 App 电池设为「不受限制」，否则悬浮条会被杀（App 内有引导按钮）。
+
+## 致谢
+
+这个项目是站在一堆别人铺好的路上做的，没有它们根本起不来。
+
+### 开源项目
+
+| 作者 | 项目 | 用在了哪 |
+|---|---|---|
+| [@xluohome](https://github.com/xluohome) | [phonedata](https://github.com/xluohome/phonedata) | 核心的归属地号段库，49.7 万条，`PhoneLookup` 的解析格式与二分索引都按它的结构实现 |
+| [@vlongen](https://github.com/vlongen) | [BanHarassment](https://github.com/vlongen/BanHarassment) | 国内骚扰号段数据集，作为「号码库」的默认更新源 |
+| [@Pixel-Tailor-CN](https://github.com/Pixel-Tailor-CN) | [Pixel Telo](https://github.com/Pixel-Tailor-CN/PixelTelo) | **设计蓝本**：本地库优先 + 联网兜底、三档处理（仅提示/静音/拒接）、重复来电放行、`CallScreeningService` 的角色适配，以及 Directory Provider 的用法，都是从这个项目学来的 |
+| [@jhonsu01](https://github.com/jhonsu01) | [OpenCallShield](https://github.com/jhonsu01/OpenCallShield) | 公开号码列表的 JSON 结构（`{number, tag}`）与"规则引擎 + 定期同步"的思路参考 |
+| [@xdtianyu](https://github.com/xdtianyu) | [PhoneNumber](https://github.com/xdtianyu/PhoneNumber) | 早期调研时参考了它的号码模型（归属地 / 标记 / 常用号码分层） |
+
+### 数据与公开信息
+
+- 快递客服号：陕西省邮政管理局、天津市政务网的寄递企业客服公示
+- 航空公司客服号：民航局服务质量监督投诉公示（12326）、武汉市交通运输局、襄阳机场公告
+- 黄页分类整理：公开的"常用电话"页面（sojson、查号吧等）
+
+### 关于呼叫角色
+
+特别感谢 AOSP 与 Google 的 `CallScreeningService` / `ContactsContract.Directory` 文档——虽然三星原生「电话」不查第三方目录（见[已知限制](#已知限制)），但 Android 至少留了这条官方通道。
 
 ## 更新日志
 
