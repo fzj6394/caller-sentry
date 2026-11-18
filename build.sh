@@ -2,15 +2,22 @@
 # 手工编译（不用 Gradle）：aapt2 -> javac -> d8 -> zip -> zipalign -> apksigner
 set -e
 
-ROOT="E:/AI-WORKBUDDY/2026-11-15-17-36-04"
-ROOT_UNIX="/e/AI-WORKBUDDY/2026-11-15-17-36-04"
-ENV="$ROOT/build-env"
-APP="$ROOT/caller-sentry"
-BT="$ENV/sdk/build-tools/34.0.0"
-PLATFORM="$ENV/sdk/platforms/android-34/android.jar"
-JAVA_BIN="$ENV/jdk/jdk-17.0.21+9/bin"
-export JAVA_HOME="$ENV/jdk/jdk-17.0.21+9"
-export PATH="$ROOT_UNIX/build-env/jdk/jdk-17.0.21+9/bin:$ROOT_UNIX/build-env/sdk/build-tools/34.0.0:$PATH"
+# 路径自动推导：脚本所在的上一级就是工程根目录（Windows 下 pwd -W 给出 E:/... 形式）
+APP="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
+ROOT="$(dirname "$APP")"
+
+# 工具链路径可以覆盖：适合工具链装在别处的情况
+ENV="${SENTRY_ENV:-$ROOT/build-env}"
+BT="${ANDROID_BT:-$ENV/sdk/build-tools/34.0.0}"
+PLATFORM="${ANDROID_PLATFORM:-$ENV/sdk/platforms/android-34/android.jar}"
+JAVA_BIN="${SENTRY_JDK:-$ENV/jdk/jdk-17.0.21+9}/bin"
+
+# apksigner.bat 依赖 JAVA_HOME；PATH 里要放 unix 风格的 bin
+JAVA_HOME_WIN="$(dirname "$JAVA_BIN")"
+export JAVA_HOME="$JAVA_HOME_WIN"
+JAVA_UNIX="$(cd "$JAVA_BIN" && pwd)"
+BT_UNIX="$(cd "$BT" && pwd)"
+export PATH="$JAVA_UNIX:$BT_UNIX:$PATH"
 
 cd "$APP"
 OUT="build"
