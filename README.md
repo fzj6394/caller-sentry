@@ -14,6 +14,21 @@
   作者 <a href="https://github.com/fzj6394">@fzj6394</a> · 许可 GPL-3.0 · 欢迎提 issue / PR
 </p>
 
+## 界面
+
+<p align="center">
+  <img src="docs/shot-home.jpg" width="270" alt="首页">
+  &nbsp;&nbsp;
+  <img src="docs/shot-sources.jpg" width="270" alt="数据源与更新">
+</p>
+
+| 首页 | 数据源与更新 |
+|---|---|
+| 授权状态、三档处理、查号、四个入口 | 号段库 / 号码库 / 在线查询 / 黄页，地址都在这一页 |
+| 号段库 497,191 条 · 黄页 116 条 | 每块独立更新，可恢复默认 |
+
+界面用 `Ui` / `UiTheme` 纯代码构建（没有 layout XML、没有 AndroidX）：渐变底 + 三处柔光斑 + 半透明玻璃卡片 + 1dp 亮边 + 投影，三套主题（冰川蓝 / 晨雾白 / 暗夜灰）随时切换。
+
 ## 功能
 
 | 模块 | 说明 |
