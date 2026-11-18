@@ -161,9 +161,10 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(serviceInfo);
 
         TextView hint = Ui.sub(this, t,
-                "「最近调用」是系统最后一次把来电交给本 App 的时间。"
-                        + "接完电话这行没变，就说明拦截服务没被调用——"
-                        + "角色被系统收回了，回首页重新授权一次即可。");
+                "测试必须用另一部电话打进来：从本机拨出去的电话，系统根本不会交给拦截服务，"
+                        + "计数器永远是 0。\n"
+                        + "「服务绑定」有记录、「最近调用」为空 → 系统绑定了但没把电话交过来；"
+                        + "两行都是 0 → 服务被冻结或角色被收回。");
         hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
@@ -184,18 +185,33 @@ public class RecordsActivity extends BasePageActivity {
 
     private void refreshServiceInfo() {
         if (serviceInfo == null) return;
+        long bind = Prefs.sp(this).getLong("bind_last", 0L);
+        int bindN = Prefs.sp(this).getInt("bind_count", 0);
         long last = Prefs.sp(this).getLong("svc_last", 0L);
-        int count = Prefs.sp(this).getInt("svc_count", 0);
+        int total = Prefs.sp(this).getInt("svc_count", 0);
+        int in = Prefs.sp(this).getInt("svc_in", 0);
+        int dir = Prefs.sp(this).getInt("svc_dir", 0);
         boolean held = roleHeld();
 
         StringBuilder sb = new StringBuilder();
         sb.append("拦截角色：").append(held ? "✅ 已授予" : "❌ 未授予，来电不会被处理");
+
+        sb.append("\n服务绑定：").append(bind == 0
+                ? "❌ 系统从未绑定过"
+                : "✅ 共 " + bindN + " 次，最近 " + ago(bind));
+
         sb.append("\n最近调用：").append(last == 0
-                ? "从未被调用" : ago(last) + "　" + clock(last));
-        sb.append("\n累计处理：").append(count).append(" 通");
+                ? "❌ 从未被调用" : "✅ " + clock(last) + "（" + ago(last) + "）");
+
+        if (last != 0) {
+            sb.append("　").append(dir == 1 ? "来电" : dir == 2 ? "拨出" : "未知方向");
+        }
+
+        sb.append("\n累计调用：").append(total).append(" 次");
+        if (total > 0) sb.append("（其中来电 ").append(in).append("）");
 
         serviceInfo.setText(sb.toString());
-        serviceInfo.setTextColor(held ? t.textMuted : t.danger);
+        serviceInfo.setTextColor(held && total > 0 ? t.textMuted : (held ? t.text : t.danger));
     }
 
     private static String ago(long ts) {

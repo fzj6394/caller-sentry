@@ -18,10 +18,27 @@ public class ScreeningService extends CallScreeningService {
     private static final int MODE_SILENCE = 1;
     private static final int MODE_REJECT = 2;
 
+    /** 系统第一次绑定（或强杀后重新绑定）本服务时走这里，用来区分「没绑定」和「绑定了没调用」 */
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        try {
+            long now = System.currentTimeMillis();
+            int n = Prefs.sp(this).getInt("bind_count", 0) + 1;
+            Prefs.sp(this).edit()
+                    .putLong("bind_last", now)
+                    .putInt("bind_count", n)
+                    .apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
     @Override
     public void onScreenCall(Call.Details details) {
         final long t0 = System.nanoTime();
         boolean responded = false;
+        // 先记账：哪怕后面抛异常，也能证明系统确实把电话交过来了
+        touch(details);
         try {
             if (details.getCallDirection() != Call.Details.DIRECTION_INCOMING) {
                 respondToCall(details, new CallResponse.Builder().build());
@@ -223,14 +240,28 @@ public class ScreeningService extends CallScreeningService {
         return gap > 0 && gap < Prefs.repeatMinutes(this) * 60_000L;
     }
 
+    /** 每进一次 onScreenCall 就记一笔，不论方向、不论成败 */
+    private void touch(Call.Details details) {
+        try {
+            long now = System.currentTimeMillis();
+            int dir = details.getCallDirection();
+            int total = Prefs.sp(this).getInt("svc_count", 0) + 1;
+            android.content.SharedPreferences.Editor e = Prefs.sp(this).edit()
+                    .putLong("svc_last", now)
+                    .putInt("svc_count", total)
+                    .putInt("svc_dir", dir);
+            if (dir == Call.Details.DIRECTION_INCOMING) {
+                e.putInt("svc_in", Prefs.sp(this).getInt("svc_in", 0) + 1);
+            }
+            e.apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void remember(String digits) {
-        long now = System.currentTimeMillis();
-        int count = Prefs.sp(this).getInt("svc_count", 0) + 1;
         Prefs.sp(this).edit()
                 .putString("last_num", digits)
-                .putLong("last_ts", now)
-                .putLong("svc_last", now)
-                .putInt("svc_count", count)
+                .putLong("last_ts", System.currentTimeMillis())
                 .apply();
     }
 
