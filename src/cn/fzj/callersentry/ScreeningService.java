@@ -224,8 +224,14 @@ public class ScreeningService extends CallScreeningService {
     }
 
     private void remember(String digits) {
-        Prefs.sp(this).edit().putString("last_num", digits)
-                .putLong("last_ts", System.currentTimeMillis()).apply();
+        long now = System.currentTimeMillis();
+        int count = Prefs.sp(this).getInt("svc_count", 0) + 1;
+        Prefs.sp(this).edit()
+                .putString("last_num", digits)
+                .putLong("last_ts", now)
+                .putLong("svc_last", now)
+                .putInt("svc_count", count)
+                .apply();
     }
 
     private static long ms(long from, long to) {

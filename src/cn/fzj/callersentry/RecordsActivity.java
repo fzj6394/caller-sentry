@@ -13,6 +13,7 @@ public class RecordsActivity extends BasePageActivity {
     private LinearLayout logBox;
     private TextView logTitle;
     private TextView overlayStatus;
+    private TextView serviceInfo;
 
     @Override
     protected String pageTitle() {
@@ -51,6 +52,7 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(clear);
         content.addView(card);
 
+        content.addView(serviceCard());
         content.addView(previewCard());
         content.addView(crashCard());
         content.addView(timingCard());
@@ -148,9 +150,118 @@ public class RecordsActivity extends BasePageActivity {
         toast("看屏幕上方，7 秒后自动消失");
     }
 
+    /** 服务状态：判断系统的拦截服务到底有没有被调用过 */
+    private LinearLayout serviceCard() {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "服务状态"));
 
-    /** 悬浮条预览：不用等真来电，点一下就能看到 7 秒提示 */
-/** 来电耗时：判定 / respond / 归属地 / 合计，用来验证优化有没有生效 */
+        serviceInfo = Ui.sub(this, t, "");
+        serviceInfo.setPadding(0, Ui.dp(this, 6), 0, 0);
+        serviceInfo.setLineSpacing(Ui.dp(this, 4), 1f);
+        card.addView(serviceInfo);
+
+        TextView hint = Ui.sub(this, t,
+                "「最近调用」是系统最后一次把来电交给本 App 的时间。"
+                        + "接完电话这行没变，就说明拦截服务没被调用——"
+                        + "角色被系统收回了，回首页重新授权一次即可。");
+        hint.setPadding(0, Ui.dp(this, 10), 0, 0);
+        card.addView(hint);
+
+        TextView fix = Ui.pill(this, t, "重新授予拦截角色", true);
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        flp.topMargin = Ui.dp(this, 12);
+        fix.setLayoutParams(flp);
+        fix.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                askRole();
+            }
+        });
+        card.addView(fix);
+        return card;
+    }
+
+    private void refreshServiceInfo() {
+        if (serviceInfo == null) return;
+        long last = Prefs.sp(this).getLong("svc_last", 0L);
+        int count = Prefs.sp(this).getInt("svc_count", 0);
+        boolean held = roleHeld();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("拦截角色：").append(held ? "✅ 已授予" : "❌ 未授予，来电不会被处理");
+        sb.append("\n最近调用：").append(last == 0
+                ? "从未被调用" : ago(last) + "　" + clock(last));
+        sb.append("\n累计处理：").append(count).append(" 通");
+
+        serviceInfo.setText(sb.toString());
+        serviceInfo.setTextColor(held ? t.textMuted : t.danger);
+    }
+
+    private static String ago(long ts) {
+        long d = System.currentTimeMillis() - ts;
+        if (d < 0) d = 0;
+        if (d < 60000L) return (d / 1000) + " 秒前";
+        if (d < 3600000L) return (d / 60000L) + " 分钟前";
+        if (d < 86400000L) return (d / 3600000L) + " 小时前";
+        return (d / 86400000L) + " 天前";
+    }
+
+    private static String clock(long ts) {
+        try {
+            return new java.text.SimpleDateFormat("MM-dd HH:mm",
+                    java.util.Locale.CHINA).format(new java.util.Date(ts));
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private boolean roleHeld() {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            try {
+                android.app.role.RoleManager rm = (android.app.role.RoleManager)
+                        getSystemService(ROLE_SERVICE);
+                return rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_CALL_SCREENING)
+                        && rm.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING);
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void askRole() {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            try {
+                android.app.role.RoleManager rm = (android.app.role.RoleManager)
+                        getSystemService(ROLE_SERVICE);
+                if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_CALL_SCREENING)) {
+                    if (rm.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING)) {
+                        toast("已经授权过了，问题可能在别处，看下面的记录");
+                        return;
+                    }
+                    startActivityForResult(rm.createRequestRoleIntent(
+                            android.app.role.RoleManager.ROLE_CALL_SCREENING), 401);
+                    return;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        try {
+            startActivity(new Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"));
+            toast("在默认应用里找「来电显示和骚扰拦截」");
+        } catch (Throwable e) {
+            toast("请到 电话 App → 设置 → 来电显示和骚扰拦截 里指定");
+        }
+    }
+
+    @Override
+    public void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == 401) refreshServiceInfo();
+    }
+
+    /** 来电耗时：判定 / respond / 归属地 / 合计，用来验证优化有没有生效 */
     private LinearLayout timingCard() {
         LinearLayout card = Ui.card(this, t);
         card.addView(Ui.title(this, t, "来电耗时（最近 10 通）"));
@@ -320,6 +431,7 @@ public class RecordsActivity extends BasePageActivity {
     @Override
     protected void onPageResume() {
         renderLogs();
+        refreshServiceInfo();
         if (overlayStatus != null) {
             boolean ov = Overlay.canDraw(this);
             boolean nt = Notify.allowed(this);
