@@ -1,8 +1,6 @@
 package cn.fzj.callersentry;
 
 import android.app.Application;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.content.Context;
 import android.os.Build;
 
@@ -20,7 +18,7 @@ import java.util.Locale;
  */
 public class App extends Application {
 
-    static final String VERSION = "2.5.2";
+    static final String VERSION = "2.5.3";
     static final String CRASH_FILE = "crash.txt";
 
     @Override
@@ -50,28 +48,13 @@ public class App extends Application {
                     PhoneLookup.warmup(App.this);
                     Yellow.size(App.this);
                     MarkCache.size(App.this);
-                    ensureChannel(App.this);
+                    Notify.ensureChannel(App.this);
                 } catch (Throwable ignored) {
                 }
             }
         }, "warmup").start();
     }
 
-    /** 通知通道只建一次，别每次来电都 createNotificationChannel */
-    static void ensureChannel(Context c) {
-        try {
-            NotificationManager nm = (NotificationManager)
-                    c.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm == null) return;
-            if (nm.getNotificationChannel(ScreeningService.CHANNEL) != null) return;
-            NotificationChannel ch = new NotificationChannel(ScreeningService.CHANNEL,
-                    "来电归属地", NotificationManager.IMPORTANCE_HIGH);
-            ch.setShowBadge(false);
-            ch.enableVibration(true);
-            nm.createNotificationChannel(ch);
-        } catch (Throwable ignored) {
-        }
-    }
 
     static String deviceLine() {
         return "android " + Build.VERSION.RELEASE + " api " + Build.VERSION.SDK_INT

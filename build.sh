@@ -56,13 +56,13 @@ fi
 # 逐个点名核对，宁可构建失败也不要出个缺类的包
 for cls in App MainActivity ScreeningService PhoneLookup Update MarkCache OnlineLookup \
            Yellow YellowStore Ui UiTheme BasePageActivity RulesActivity SourcesActivity \
-           AppearanceActivity RecordsActivity CallerIdProvider Blacklist LogStore Timing Overlay NumUtil Prefs; do
+           AppearanceActivity RecordsActivity CallerIdProvider Notify Blacklist LogStore Timing Overlay NumUtil Prefs; do
     if [ ! -f "$OUT/classes/cn/fzj/callersentry/$cls.class" ]; then
         echo "!! 缺少编译产物：$cls.class"
         exit 1
     fi
 done
-echo "   23 个类全部生成"
+echo "   24 个类全部生成"
 
 echo "== 4/7 d8 =="
 find "$OUT/classes" -name "*.class" > "$OUT/classes.txt"

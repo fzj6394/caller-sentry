@@ -117,6 +117,24 @@ public class RecordsActivity extends BasePageActivity {
             }
         });
         btns.addView(spam);
+
+        TextView note = Ui.pill(this, t, "预览通知", false);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        nlp.leftMargin = Ui.dp(this, 8);
+        note.setLayoutParams(nlp);
+        note.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!Notify.allowed(RecordsActivity.this)) {
+                    toast("通知没开：设置 → 应用 → 来电哨兵 → 通知");
+                    return;
+                }
+                Notify.show(RecordsActivity.this, "绍兴 · 电信", "0575 8888 8888");
+                toast("下拉通知栏看看");
+            }
+        });
+        btns.addView(note);
         card.addView(btns);
         return card;
     }
@@ -303,11 +321,11 @@ public class RecordsActivity extends BasePageActivity {
     protected void onPageResume() {
         renderLogs();
         if (overlayStatus != null) {
-            boolean ok = Overlay.canDraw(this);
-            overlayStatus.setText(ok
-                    ? "悬浮窗权限：✅ 已授予，预览和真来电都会弹提示"
-                    : "悬浮窗权限：❌ 未授予 —— 现在只会发通知，看不到悬浮条");
-            overlayStatus.setTextColor(ok ? t.textMuted : t.danger);
+            boolean ov = Overlay.canDraw(this);
+            boolean nt = Notify.allowed(this);
+            overlayStatus.setText("悬浮窗：" + (ov ? "✅ 已授予" : "❌ 未授予")
+                    + "　通知：" + (nt ? "✅ 已允许" : "❌ 被关闭"));
+            overlayStatus.setTextColor(ov && nt ? t.textMuted : t.danger);
         }
     }
 }

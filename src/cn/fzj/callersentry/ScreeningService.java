@@ -1,10 +1,5 @@
 package cn.fzj.callersentry;
 
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Context;
-import android.content.Intent;
 import android.net.Uri;
 import android.telecom.Call;
 import android.telecom.CallScreeningService;
@@ -19,7 +14,6 @@ import android.telecom.CallScreeningService;
  */
 public class ScreeningService extends CallScreeningService {
 
-    static final String CHANNEL = "caller_id";
     private static final int MODE_TIP = 0;
     private static final int MODE_SILENCE = 1;
     private static final int MODE_REJECT = 2;
@@ -216,7 +210,7 @@ public class ScreeningService extends CallScreeningService {
             Overlay.show(this, l[0], l[1], warn);
         }
         if (Prefs.notifyOn(this)) {
-            notifyCaller(l[1], l[0]);
+            Notify.show(this, l[0], l[1]);
         }
     }
 
@@ -238,25 +232,4 @@ public class ScreeningService extends CallScreeningService {
         return (to - from) / 1_000_000L;
     }
 
-    private void notifyCaller(String number, String title) {
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
-
-        Intent open = new Intent(this, MainActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Notification n = new Notification.Builder(this, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle(title)
-                .setContentText(number)
-                .setPriority(Notification.PRIORITY_MAX)
-                .setAutoCancel(true)
-                .setContentIntent(pi)
-                .build();
-        try {
-            nm.notify(1001, n);
-        } catch (Throwable ignored) {
-        }
-    }
 }
