@@ -50,12 +50,65 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(clear);
         content.addView(card);
 
+        content.addView(previewCard());
         content.addView(crashCard());
         content.addView(timingCard());
         content.addView(directoryCard());
     }
 
-    /** 来电耗时：判定 / respond / 归属地 / 合计，用来验证优化有没有生效 */
+
+    /** 悬浮条预览：不用等真来电，点一下就能看到 7 秒提示 */
+    private LinearLayout previewCard() {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "悬浮条预览"));
+
+        TextView hint = Ui.sub(this, t,
+                "点一下，屏幕上方会出现 7 秒提示，位置和样式与真实来电一致。"
+                        + "需要悬浮窗权限，没给的话只会走通知栏。");
+        hint.setPadding(0, Ui.dp(this, 6), 0, 0);
+        card.addView(hint);
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        btns.setPadding(0, Ui.dp(this, 12), 0, 0);
+
+        TextView normal = Ui.pill(this, t, "普通来电", true);
+        normal.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                preview("绍兴 · 电信", "0575 8888 8888", false);
+            }
+        });
+        btns.addView(normal);
+
+        TextView spam = Ui.pill(this, t, "命中号码库", false);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        slp.leftMargin = Ui.dp(this, 8);
+        spam.setLayoutParams(slp);
+        spam.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                preview("我的号码库", "绍兴 · 电信　138 0013 8000", true);
+            }
+        });
+        btns.addView(spam);
+        card.addView(btns);
+        return card;
+    }
+
+    private void preview(String line1, String line2, boolean warn) {
+        if (!Overlay.canDraw(this)) {
+            toast("先在首页点「悬浮窗」把权限给了");
+            return;
+        }
+        Overlay.show(this, line1, line2, warn);
+        toast("看屏幕上方，7 秒后自动消失");
+    }
+
+
+    /** 悬浮条预览：不用等真来电，点一下就能看到 7 秒提示 */
+/** 来电耗时：判定 / respond / 归属地 / 合计，用来验证优化有没有生效 */
     private LinearLayout timingCard() {
         LinearLayout card = Ui.card(this, t);
         card.addView(Ui.title(this, t, "来电耗时（最近 10 通）"));
