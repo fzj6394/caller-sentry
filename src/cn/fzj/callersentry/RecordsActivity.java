@@ -12,6 +12,7 @@ public class RecordsActivity extends BasePageActivity {
 
     private LinearLayout logBox;
     private TextView logTitle;
+    private TextView overlayStatus;
 
     @Override
     protected String pageTitle() {
@@ -62,10 +63,33 @@ public class RecordsActivity extends BasePageActivity {
         LinearLayout card = Ui.card(this, t);
         card.addView(Ui.title(this, t, "悬浮条预览"));
 
+        overlayStatus = Ui.sub(this, t, "");
+        overlayStatus.setPadding(0, Ui.dp(this, 6), 0, 0);
+        card.addView(overlayStatus);
+
+        final TextView open = Ui.pill(this, t, "去开启悬浮窗", false);
+        LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        olp.topMargin = Ui.dp(this, 10);
+        open.setLayoutParams(olp);
+        open.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    startActivity(new android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:" + getPackageName())));
+                } catch (Throwable e) {
+                    toast("设置 → 应用 → 特殊权限 → 显示在其他应用上层");
+                }
+            }
+        });
+        card.addView(open);
+
         TextView hint = Ui.sub(this, t,
-                "点一下，屏幕上方会出现 7 秒提示，位置和样式与真实来电一致。"
-                        + "需要悬浮窗权限，没给的话只会走通知栏。");
-        hint.setPadding(0, Ui.dp(this, 6), 0, 0);
+                "点按钮，屏幕上方会出现 7 秒提示，位置和样式与真实来电一致。"
+                        + "真来电时也只有这 7 秒，屏幕朝下或放兜里就看不到。");
+        hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
         LinearLayout btns = new LinearLayout(this);
@@ -278,5 +302,12 @@ public class RecordsActivity extends BasePageActivity {
     @Override
     protected void onPageResume() {
         renderLogs();
+        if (overlayStatus != null) {
+            boolean ok = Overlay.canDraw(this);
+            overlayStatus.setText(ok
+                    ? "悬浮窗权限：✅ 已授予，预览和真来电都会弹提示"
+                    : "悬浮窗权限：❌ 未授予 —— 现在只会发通知，看不到悬浮条");
+            overlayStatus.setTextColor(ok ? t.textMuted : t.danger);
+        }
     }
 }
