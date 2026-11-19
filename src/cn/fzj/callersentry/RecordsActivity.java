@@ -168,19 +168,90 @@ public class RecordsActivity extends BasePageActivity {
         hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
-        TextView fix = Ui.pill(this, t, "重新授予拦截角色", true);
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
+        TextView probe = Ui.sub(this, t, screeningProbe());
+        probe.setPadding(0, Ui.dp(this, 12), 0, 0);
+        probe.setTextColor(t.textMuted);
+        card.addView(probe);
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        flp.topMargin = Ui.dp(this, 12);
-        fix.setLayoutParams(flp);
+        blp.topMargin = Ui.dp(this, 12);
+        btns.setLayoutParams(blp);
+
+        TextView fix = Ui.pill(this, t, "重新授予拦截角色", true);
         fix.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 askRole();
             }
         });
-        card.addView(fix);
+        btns.addView(fix);
+
+        TextView batt = Ui.pill(this, t, "应用设置·电池", false);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ilp.leftMargin = Ui.dp(this, 8);
+        batt.setLayoutParams(ilp);
+        batt.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    startActivity(new android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:" + getPackageName())));
+                    toast("把「电池」改成「不受限制」，再点「强制停止」下一次系统才会重新拉起服务");
+                } catch (Throwable e) {
+                    toast("设置 → 应用 → 来电哨兵 → 电池 → 不受限制");
+                }
+            }
+        });
+        btns.addView(batt);
+        card.addView(btns);
         return card;
+    }
+
+    /**
+     * 系统到底认不认这个服务：问 PackageManager 要所有声明的拦截服务。
+     * 我们不在这个列表里，就说明系统根本不会来绑我们，跟代码无关。
+     */
+    private String screeningProbe() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            android.content.Intent i = new android.content.Intent("android.telecom.CallScreeningService");
+            java.util.List<android.content.pm.ResolveInfo> list = getPackageManager()
+                    .queryIntentServices(i, 0);
+            int n = list == null ? 0 : list.size();
+            sb.append("系统可发现的拦截服务：").append(n).append(" 个");
+            boolean hasUs = false;
+            if (list != null) {
+                for (android.content.pm.ResolveInfo ri : list) {
+                    if (ri.serviceInfo == null) continue;
+                    boolean us = getPackageName().equals(ri.serviceInfo.packageName);
+                    if (us) hasUs = true;
+                    sb.append("\n· ");
+                    if (us) {
+                        sb.append("✅ 本应用（").append(ri.serviceInfo.name).append("）");
+                    } else {
+                        sb.append(ri.serviceInfo.packageName);
+                    }
+                }
+            }
+            if (!hasUs) {
+                sb.append("\n❌ 列表里没有本应用 → 系统不会来绑定，这属于安装/组件问题");
+            }
+            android.content.ComponentName cn = new android.content.ComponentName(
+                    this, ScreeningService.class);
+            int st = getPackageManager().getComponentEnabledSetting(cn);
+            sb.append("\n本应用服务组件：")
+                    .append(st == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                            ? "❌ 被禁用"
+                            : "✅ 启用");
+        } catch (Throwable e) {
+            sb.append("探测失败：").append(e);
+        }
+        return sb.toString();
     }
 
     private void refreshServiceInfo() {
@@ -195,6 +266,9 @@ public class RecordsActivity extends BasePageActivity {
 
         StringBuilder sb = new StringBuilder();
         sb.append("拦截角色：").append(held ? "✅ 已授予" : "❌ 未授予，来电不会被处理");
+
+        sb.append("\n后台限制：").append(bgRestricted()
+                ? "❌ 受限，三星会冻结本应用" : "✅ 不受限");
 
         sb.append("\n服务绑定：").append(bind == 0
                 ? "❌ 系统从未绑定过"
@@ -232,6 +306,19 @@ public class RecordsActivity extends BasePageActivity {
         }
     }
 
+    /** 后台受限 = 三星把本应用冻结了，服务自然起不来 */
+    private boolean bgRestricted() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                android.app.ActivityManager am = (android.app.ActivityManager)
+                        getSystemService(ACTIVITY_SERVICE);
+                return am != null && am.isBackgroundRestricted();
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     private boolean roleHeld() {
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             try {
@@ -253,7 +340,14 @@ public class RecordsActivity extends BasePageActivity {
                         getSystemService(ROLE_SERVICE);
                 if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_CALL_SCREENING)) {
                     if (rm.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING)) {
-                        toast("已经授权过了，问题可能在别处，看下面的记录");
+                        // 角色在手但系统不调用：把角色先切走再切回来，能重置系统的绑定缓存
+                        try {
+                            startActivity(new Intent(
+                                    android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
+                            toast("把「来电显示和骚扰拦截」先改成别的，再改回来电哨兵");
+                        } catch (Throwable e) {
+                            toast("已经授权过了，问题可能在电池/休眠策略");
+                        }
                         return;
                     }
                     startActivityForResult(rm.createRequestRoleIntent(
