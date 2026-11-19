@@ -220,73 +220,70 @@ public class RecordsActivity extends BasePageActivity {
     /** 系统侧探测：这个放高级里，平时不用看 */
     private LinearLayout probeCard() {
         LinearLayout card = Ui.card(this, t);
-        card.addView(Ui.title(this, t, "系统侧探测"));
 
-        TextView hint = Ui.sub(this, t,
-                "拦截服务在本机不可用，数字为 0 属正常；用另一部电话打进来才会产生计数。");
-        hint.setPadding(0, Ui.dp(this, 6), 0, 0);
-        card.addView(hint);
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        TextView probe = Ui.sub(this, t, screeningProbe());
-        probe.setPadding(0, Ui.dp(this, 12), 0, 0);
-        probe.setTextColor(t.textMuted);
-        card.addView(probe);
-
-        LinearLayout btns = new LinearLayout(this);
-        btns.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = Ui.dp(this, 12);
-        btns.setLayoutParams(blp);
-
-        TextView fix = Ui.pill(this, t, "重新授予拦截角色", true);
-        fix.setOnClickListener(new View.OnClickListener() {
+        TextView title = Ui.title(this, t, "系统侧探测");
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        head.addView(title);
+        head.addView(Ui.link(this, t, "清零计数", new Runnable() {
             @Override
-            public void onClick(View v) {
-                askRole();
-            }
-        });
-        btns.addView(fix);
-
-        TextView batt = Ui.pill(this, t, "应用设置·电池", false);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ilp.leftMargin = Ui.dp(this, 8);
-        batt.setLayoutParams(ilp);
-        batt.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    startActivity(new android.content.Intent(
-                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            android.net.Uri.parse("package:" + getPackageName())));
-                    toast("把「电池」改成「不受限制」，再点「强制停止」下一次系统才会重新拉起服务");
-                } catch (Throwable e) {
-                    toast("设置 → 应用 → 来电哨兵 → 电池 → 不受限制");
-                }
-            }
-        });
-        btns.addView(batt);
-
-        TextView zero = Ui.pill(this, t, "清零计数", false);
-        LinearLayout.LayoutParams zlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        zlp.leftMargin = Ui.dp(this, 8);
-        zero.setLayoutParams(zlp);
-        zero.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
+            public void run() {
                 Prefs.sp(RecordsActivity.this).edit()
                         .remove("svc_count").remove("svc_in").remove("svc_dir")
                         .remove("svc_last").remove("bind_count").remove("bind_last")
                         .remove("w_count").remove("w_last")
                         .apply();
                 refreshServiceInfo();
-                toast("计数已清零，接一通电话再看");
+                toast("计数已清零");
+            }
+        }));
+        card.addView(head);
+
+        TextView probe = Ui.sub(this, t, screeningProbe());
+        probe.setPadding(0, Ui.dp(this, 8), 0, 0);
+        probe.setTextColor(t.textMuted);
+        card.addView(probe);
+
+        TextView hint = Ui.sub(this, t, "拦截服务在本机不可用，数字为 0 属正常。");
+        hint.setPadding(0, Ui.dp(this, 10), 0, 0);
+        card.addView(hint);
+
+        LinearLayout links = new LinearLayout(this);
+        links.setOrientation(LinearLayout.HORIZONTAL);
+        links.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        links.setPadding(0, Ui.dp(this, 4), 0, 0);
+
+        links.addView(Ui.link(this, t, "重新授予角色", new Runnable() {
+            @Override
+            public void run() {
+                askRole();
+            }
+        }));
+
+        TextView batt = Ui.link(this, t, "应用设置·电池", new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    startActivity(new android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:" + getPackageName())));
+                    toast("把「电池」改成「不受限制」");
+                } catch (Throwable e) {
+                    toast("设置 → 应用 → 来电哨兵 → 电池 → 不受限制");
+                }
             }
         });
-        btns.addView(zero);
-        card.addView(btns);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ilp.leftMargin = Ui.dp(this, 18);
+        batt.setLayoutParams(ilp);
+        links.addView(batt);
+
+        card.addView(links);
         return card;
     }
 
@@ -780,9 +777,22 @@ public class RecordsActivity extends BasePageActivity {
         LinearLayout card = Ui.card(this, t);
         card.addView(Ui.title(this, t, "运行日志"));
 
-        TextView hint = Ui.sub(this, t,
-                "记录了进入服务、判定、respond、悬浮窗 addView 结果、通知是否发出，"
-                        + "以及被吞掉的异常原文。接完电话点「分享日志」发我即可。");
+        LinearLayout toggle = Ui.item(this, t, "记录日志",
+                Prefs.traceOn(this) ? "开" : "关", new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean on = !Prefs.traceOn(RecordsActivity.this);
+                        Prefs.setTraceOn(RecordsActivity.this, on);
+                        if (!on) Trace.clear(RecordsActivity.this);
+                        toast(on ? "已开启：之后的来电会逐条记录" : "已关闭，不再写入");
+                        recreate();
+                    }
+                });
+        card.addView(toggle);
+
+        TextView hint = Ui.sub(this, t, Prefs.traceOn(this)
+                ? "记的是进入服务、判定、respond、悬浮窗结果、通知是否发出，以及被吞掉的异常原文。"
+                : "平时关掉不写盘。来电不提示、或想让我看问题时再打开。");
         hint.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 8));
         card.addView(hint);
 

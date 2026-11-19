@@ -33,6 +33,7 @@ public final class Trace {
 
     public static void add(final Context c, final String tag, final String msg) {
         if (c == null) return;
+        if (!Prefs.traceOn(c)) return;
         final Context app;
         try {
             app = c.getApplicationContext();

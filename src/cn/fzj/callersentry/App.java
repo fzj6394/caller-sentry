@@ -18,7 +18,7 @@ import java.util.Locale;
  */
 public class App extends Application {
 
-    static final String VERSION = "2.7.0";
+    static final String VERSION = "2.7.1";
     static final String CRASH_FILE = "crash.txt";
 
     @Override
@@ -41,6 +41,8 @@ public class App extends Application {
             }
         });
 
+        migrateLanUrls();
+
         Trace.add(this, "app", "进程启动 v" + VERSION + " / " + Build.MODEL
                 + " / api " + Build.VERSION.SDK_INT);
 
@@ -61,6 +63,29 @@ public class App extends Application {
         }, "warmup").start();
     }
 
+
+    /**
+     * 早期调试时数据源地址被填成了局域网地址（192.168.x.x / :8765），
+     * 换个网络就失效，还会让人以为"默认就是这个"。装新版时清一次。
+     */
+    private void migrateLanUrls() {
+        try {
+            android.content.SharedPreferences sp = Prefs.sp(this);
+            if (sp.getBoolean("mig_lan", false)) return;
+            android.content.SharedPreferences.Editor e = sp.edit();
+            String[] keys = {"url_yellow", "url_seg", "url_spam", "online_url"};
+            for (String k : keys) {
+                String v = sp.getString(k, "");
+                if (v != null && (v.contains("192.168.") || v.contains("127.0.0.1")
+                        || v.contains("10.0.2.2") || v.contains(":8765"))) {
+                    e.remove(k);
+                }
+            }
+            e.putBoolean("mig_lan", true).apply();
+            Prefs.invalidate();
+        } catch (Throwable ignored) {
+        }
+    }
 
     static String deviceLine() {
         return "android " + Build.VERSION.RELEASE + " api " + Build.VERSION.SDK_INT

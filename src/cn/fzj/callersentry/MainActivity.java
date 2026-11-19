@@ -40,6 +40,11 @@ public class MainActivity extends Activity {
     private TextView overlayValue;
     private TextView batteryValue;
     private TextView roleValue;
+    private TextView settingsValue;
+    private LinearLayout settingsBox;
+    private boolean settingsOpen;
+    private boolean settingsTouched;
+    private int pendingIssues;
     private TextView result;
     private EditText input;
 
@@ -169,7 +174,23 @@ public class MainActivity extends Activity {
 
     private void settingsBlock(LinearLayout parent) {
         LinearLayout card = Ui.card(this, t);
-        card.addView(Ui.title(this, t, "开关与权限"));
+
+        LinearLayout head = Ui.item(this, t, "设置与权限", "", new Runnable() {
+            @Override
+            public void run() {
+                settingsTouched = true;
+                settingsOpen = !settingsOpen;
+                applySettingsState();
+            }
+        });
+        settingsValue = (TextView) head.getChildAt(1);
+        card.addView(head);
+
+        settingsBox = new LinearLayout(this);
+        settingsBox.setOrientation(LinearLayout.VERTICAL);
+        settingsBox.setVisibility(View.GONE);
+
+        settingsBox.addView(Ui.divider(this, t));
 
         LinearLayout compatRow = Ui.item(this, t, "兼容模式", "", new Runnable() {
             @Override
@@ -178,8 +199,8 @@ public class MainActivity extends Activity {
             }
         });
         compatValue = (TextView) compatRow.getChildAt(1);
-        card.addView(compatRow);
-        card.addView(Ui.divider(this, t));
+        settingsBox.addView(compatRow);
+        settingsBox.addView(Ui.divider(this, t));
 
         LinearLayout ov = Ui.item(this, t, "悬浮窗权限", "", new Runnable() {
             @Override
@@ -188,8 +209,8 @@ public class MainActivity extends Activity {
             }
         });
         overlayValue = (TextView) ov.getChildAt(1);
-        card.addView(ov);
-        card.addView(Ui.divider(this, t));
+        settingsBox.addView(ov);
+        settingsBox.addView(Ui.divider(this, t));
 
         LinearLayout bt = Ui.item(this, t, "后台运行", "", new Runnable() {
             @Override
@@ -198,19 +219,31 @@ public class MainActivity extends Activity {
             }
         });
         batteryValue = (TextView) bt.getChildAt(1);
-        card.addView(bt);
-        card.addView(Ui.divider(this, t));
+        settingsBox.addView(bt);
+        settingsBox.addView(Ui.divider(this, t));
 
-        LinearLayout rl = Ui.item(this, t, "来电识别权限", "", new Runnable() {
+        LinearLayout rl = Ui.item(this, t, "来电识别权限", "本机不可用", new Runnable() {
             @Override
             public void run() {
                 requestRole();
             }
         });
         roleValue = (TextView) rl.getChildAt(1);
-        card.addView(rl);
+        settingsBox.addView(rl);
 
+        card.addView(settingsBox);
         parent.addView(card);
+    }
+
+    private void applySettingsState() {
+        if (settingsBox == null) return;
+        settingsBox.setVisibility(settingsOpen ? View.VISIBLE : View.GONE);
+        if (settingsValue == null) return;
+        if (pendingIssues == 0) {
+            settingsValue.setText(settingsOpen ? "收起" : "全部就绪");
+        } else {
+            settingsValue.setText(pendingIssues + " 项待处理");
+        }
     }
 
     private void toggleCompat() {
@@ -406,7 +439,16 @@ public class MainActivity extends Activity {
         }
         if (overlayValue != null) overlayValue.setText(Overlay.canDraw(this) ? "已授予" : "未授予");
         if (batteryValue != null) batteryValue.setText(batteryFree(this) ? "不受限" : "受限，点此调整");
-        if (roleValue != null) roleValue.setText(roleHeld() ? "已授予" : "未授予");
+        if (roleValue != null) roleValue.setText(roleHeld() ? "已授予" : "本机不可用");
+
+        int issues = 0;
+        if (!compatOn || !running) issues++;
+        if (!Overlay.canDraw(this)) issues++;
+        if (!batteryFree(this)) issues++;
+        pendingIssues = issues;
+        // 有未处理的问题就自动展开，全部就绪时默认收起
+        if (issues > 0 && !settingsTouched) settingsOpen = true;
+        applySettingsState();
     }
 
     private void setStat(int i, String v) {

@@ -19,6 +19,7 @@ public final class Prefs {
     private static volatile boolean notify = true;
     private static volatile boolean overlay = true;
     private static volatile boolean online = false;
+    private static volatile boolean trace = false;
     private static volatile boolean autoCheck = true;
     private static volatile int blockMode = 0;
     private static volatile int repeatMinutes = 5;
@@ -44,6 +45,7 @@ public final class Prefs {
             notify = p.getBoolean("notify", true);
             overlay = p.getBoolean("overlay", true);
             online = p.getBoolean("online_on", false);
+            trace = p.getBoolean("trace_on", false);
             autoCheck = p.getBoolean("auto_check", true);
             blockMode = p.getInt("block_mode", 0);
             repeatMinutes = p.getInt("repeat_min", 5);
@@ -69,6 +71,17 @@ public final class Prefs {
     public static void setNotifyOn(Context c, boolean v) {
         notify = v;
         sp(c).edit().putBoolean("notify", v).apply();
+    }
+
+    /** 运行日志开关：默认关，排查问题时再打开 */
+    public static boolean traceOn(Context c) {
+        ensure(c);
+        return trace;
+    }
+
+    public static void setTraceOn(Context c, boolean v) {
+        trace = v;
+        sp(c).edit().putBoolean("trace_on", v).apply();
     }
 
     public static boolean overlayOn(Context c) {
