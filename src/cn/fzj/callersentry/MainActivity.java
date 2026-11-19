@@ -190,7 +190,13 @@ public class MainActivity extends Activity {
         buttons2.setPadding(0, Ui.dp(this, 8), 0, 0);
 
         final boolean compatNow = Prefs.sp(this).getBoolean("compat_on", false);
-        final TextView compat = Ui.pill(this, t, compatNow ? "兼容模式：开" : "兼容模式：关", compatNow);
+        final TextView compat = Ui.pill(this, t,
+                compatNow ? "兼容模式：开" : "兼容模式：关", compatNow);
+        // 覆盖安装或系统回收后服务会停掉，开关却还显示"开"。
+        // 每次进前台补一次启动，避免用户以为开着其实没跑。
+        if (compatNow && !Watcher.isRunning()) {
+            Watcher.start(this);
+        }
         compat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

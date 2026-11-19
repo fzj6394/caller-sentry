@@ -29,6 +29,8 @@ public class Watcher extends Service {
 
     private BroadcastReceiver rx;
 
+    private static volatile boolean running;
+
     public static void start(Context c) {
         try {
             Intent i = new Intent(c, Watcher.class);
@@ -42,6 +44,11 @@ public class Watcher extends Service {
         } catch (Throwable t) {
             Trace.add(c, "watcher", "启动失败 " + t.getClass().getSimpleName() + ": " + t.getMessage());
         }
+    }
+
+    /** 服务是否真的在跑：覆盖安装、被系统回收后这个会是 false */
+    public static boolean isRunning() {
+        return running;
     }
 
     public static void stop(Context c) {
@@ -61,6 +68,7 @@ public class Watcher extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        running = true;
         Trace.add(this, "watcher", "服务创建");
         startForegroundNotice();
 
@@ -87,6 +95,7 @@ public class Watcher extends Service {
             }
             rx = null;
         }
+        running = false;
         Trace.add(this, "watcher", "服务销毁");
         super.onDestroy();
     }
