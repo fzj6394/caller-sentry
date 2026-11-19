@@ -97,7 +97,10 @@ public final class Overlay {
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        lp.y = dp(c, 120);
+        // 原来固定 120dp，正好落在三星来电卡片（顶部那块圆角卡片）的范围内，
+        // 被卡片遮住后看起来像"没显示"。改到屏幕 38% 高度处，避开卡片。
+        int screenH = c.getResources().getDisplayMetrics().heightPixels;
+        lp.y = Math.max(dp(c, 120), (int) (screenH * 0.38f));
 
         try {
             wm.addView(box, lp);

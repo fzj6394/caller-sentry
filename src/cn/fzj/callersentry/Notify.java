@@ -60,6 +60,10 @@ public final class Notify {
                     .setPriority(Notification.PRIORITY_MAX)
                     .setAutoCancel(true)
                     .setContentIntent(pi)
+                    .setCategory(Notification.CATEGORY_CALL)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .setWhen(System.currentTimeMillis())
+                    .setShowWhen(true)
                     .build();
             nm.notify(1001, n);
             Trace.add(c, "notify", "已发出：" + title + " / " + text);
