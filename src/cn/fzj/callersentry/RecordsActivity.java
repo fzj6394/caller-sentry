@@ -758,6 +758,27 @@ public class RecordsActivity extends BasePageActivity {
         });
         btns.addView(refresh);
 
+        TextView probe = Ui.pill(this, t, "写入自检", false);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        plp.leftMargin = Ui.dp(this, 8);
+        probe.setLayoutParams(plp);
+        probe.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Trace.add(RecordsActivity.this, "test", "写入自检 ping");
+                watchHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        renderTrace();
+                        int n = Trace.all(RecordsActivity.this).size();
+                        toast(n > 0 ? "日志可用，当前 " + n + " 条" : "日志写入失败：读回 0 条");
+                    }
+                }, 400);
+            }
+        });
+        btns.addView(probe);
+
         TextView clear = Ui.pill(this, t, "清空", false);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -779,7 +800,8 @@ public class RecordsActivity extends BasePageActivity {
         if (traceInfo == null) return;
         java.util.List<String> rows = Trace.all(this);
         if (rows.isEmpty()) {
-            traceInfo.setText("还没有日志。接一通电话后再看。");
+            traceInfo.setText("还没有日志。\n点「写入自检」可验证日志是否可用；"
+                    + "如果自检有记录、而接电话后没有新增，说明来电没进到本应用。");
             return;
         }
         int n = Math.min(rows.size(), 40);
@@ -821,7 +843,14 @@ public class RecordsActivity extends BasePageActivity {
         renderLogs();
         refreshServiceInfo();
         renderWatch();
-        renderTrace();
+        // 留在日志里一条"我来过"，用来区分"没调用"和"日志没写进去"
+        Trace.add(this, "ui", "打开诊断页");
+        watchHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                renderTrace();
+            }
+        }, 350);
         if (overlayStatus != null) {
             boolean ov = Overlay.canDraw(this);
             boolean nt = Notify.allowed(this);

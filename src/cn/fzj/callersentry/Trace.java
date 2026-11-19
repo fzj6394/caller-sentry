@@ -107,7 +107,11 @@ public final class Trace {
                 .append(" · 通知 ").append(Notify.allowed(c) ? "允许" : "关闭")
                 .append('\n');
         sb.append("---------- 日志 ----------\n");
-        for (String line : all(c)) {
+        java.util.List<String> rows = all(c);
+        if (rows.isEmpty()) {
+            sb.append("（无任何日志：请点「写入自检」确认日志可用）\n");
+        }
+        for (String line : rows) {
             sb.append(line).append('\n');
         }
         return sb.toString();
