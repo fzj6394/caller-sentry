@@ -76,7 +76,6 @@ public class RecordsActivity extends BasePageActivity {
         content.addView(crashCard());
         content.addView(timingCard());
         content.addView(traceCard());
-        content.addView(contactsCard());
         content.addView(directoryCard());
     }
 
@@ -656,10 +655,6 @@ public class RecordsActivity extends BasePageActivity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] grant) {
         super.onRequestPermissionsResult(code, perms, grant);
         if (code == 301) recreate();
-        if (code == 303) {
-            renderContacts();
-            toast(hasContactsPerm() ? "已授权，再点一次「写入已标记号码」" : "没有通讯录权限，无法写入");
-        }
         if (code == 302) {
             boolean ok = true;
             for (int g : grant) if (g != android.content.pm.PackageManager.PERMISSION_GRANTED) ok = false;
@@ -834,174 +829,6 @@ public class RecordsActivity extends BasePageActivity {
             sb.append(rows.get(i));
         }
         traceInfo.setText(sb.toString());
-    }
-
-    private TextView contactInfo;
-    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
-
-    /** 通话记录里显示名字：绕开 Directory，直接把号码写成联系人 */
-    private LinearLayout contactsCard() {
-        LinearLayout card = Ui.card(this, t);
-        card.addView(Ui.title(this, t, "让通话记录显示名字"));
-
-        TextView desc = Ui.sub(this, t,
-                "通话记录里的名字，是系统拿号码去通讯录查出来的。三星电话 App 不查第三方号码目录"
-                        + "（我们已经提供了那个目录，它不用），所以只能把这个号码真的写成联系人。\n"
-                        + "只写在本机、不同步云端，写入时带一个隐藏标记，随时可以一键清除。");
-        desc.setPadding(0, Ui.dp(this, 6), 0, 0);
-        card.addView(desc);
-
-        contactInfo = Ui.sub(this, t, "");
-        contactInfo.setPadding(0, Ui.dp(this, 10), 0, 0);
-        contactInfo.setLineSpacing(Ui.dp(this, 3), 1f);
-        card.addView(contactInfo);
-
-        LinearLayout btns = new LinearLayout(this);
-        btns.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = Ui.dp(this, 12);
-        btns.setLayoutParams(blp);
-
-        TextView write = Ui.pill(this, t, "写入已标记号码", true);
-        write.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                writeTaggedToContacts();
-            }
-        });
-        btns.addView(write);
-
-        TextView clean = Ui.pill(this, t, "清除", false);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        clp.leftMargin = Ui.dp(this, 8);
-        clean.setLayoutParams(clp);
-        clean.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                confirmClearContacts();
-            }
-        });
-        btns.addView(clean);
-        card.addView(btns);
-        return card;
-    }
-
-    private void renderContacts() {
-        if (contactInfo == null) return;
-        boolean granted = hasContactsPerm();
-        int n = 0;
-        if (granted) {
-            try {
-                n = Contacts.count(this);
-            } catch (Throwable ignored) {
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append("通讯录权限：").append(granted ? "✅ 已授予" : "❌ 未授予");
-        if (granted) sb.append("\n本应用已写入：").append(n).append(" 条联系人");
-        int tags = Tags.entries(this).size();
-        sb.append("\n已标记号码：").append(tags).append(" 个");
-        contactInfo.setText(sb.toString());
-        contactInfo.setTextColor(granted ? t.textMuted : t.danger);
-    }
-
-    private boolean hasContactsPerm() {
-        try {
-            return checkSelfPermission(android.Manifest.permission.READ_CONTACTS)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED
-                    && checkSelfPermission(android.Manifest.permission.WRITE_CONTACTS)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    private void writeTaggedToContacts() {
-        if (!hasContactsPerm()) {
-            toast("需要「通讯录」读写权限");
-            requestPermissions(new String[]{
-                    android.Manifest.permission.READ_CONTACTS,
-                    android.Manifest.permission.WRITE_CONTACTS}, 303);
-            return;
-        }
-        if (!Tags.hasAny(this)) {
-            toast("先在上面的记录里给号码打标签，再来写入");
-            return;
-        }
-        toast("正在写入…");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                int ok = 0, skip = 0;
-                try {
-                    PhoneLookup lib = PhoneLookup.get(RecordsActivity.this);
-                    for (java.util.Map.Entry<String, String> e : Tags.entries(
-                            RecordsActivity.this).entrySet()) {
-                        String digits = e.getKey();
-                        String label = e.getValue();
-                        if (Contacts.exists(RecordsActivity.this, digits)) {
-                            skip++;
-                            continue;
-                        }
-                        String area = "";
-                        try {
-                            area = NumUtil.describe(null, digits, lib.lookupMobile(digits));
-                        } catch (Throwable ignored) {
-                        }
-                        if (Contacts.write(RecordsActivity.this, digits,
-                                Contacts.makeName(digits, area, label))) {
-                            ok++;
-                        }
-                    }
-                } catch (Throwable ignored) {
-                }
-                final int okF = ok, skipF = skip;
-                ui.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        renderContacts();
-                        toast("写入 " + okF + " 条" + (skipF > 0 ? "，跳过已存在 " + skipF + " 条" : ""));
-                    }
-                });
-            }
-        }, "write-contacts").start();
-    }
-
-    private void confirmClearContacts() {
-        if (!hasContactsPerm()) {
-            toast("需要「通讯录」读写权限");
-            return;
-        }
-        final int n = Contacts.count(this);
-        if (n == 0) {
-            toast("没有本应用写入的联系人");
-            return;
-        }
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("清除 " + n + " 条联系人？")
-                .setMessage("只会删掉本应用写入的，您自己的联系人不受影响。")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("清除", new android.content.DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(android.content.DialogInterface d, int which) {
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                final int done = Contacts.clear(RecordsActivity.this);
-                                ui.post(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        renderContacts();
-                                        toast("已清除 " + done + " 条");
-                                    }
-                                });
-                            }
-                        }, "clear-contacts").start();
-                    }
-                })
-                .show();
     }
 
     private void renderLogs() {
