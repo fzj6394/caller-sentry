@@ -37,10 +37,26 @@ public class RecordsActivity extends BasePageActivity {
         logBox.setPadding(0, Ui.dp(this, 8), 0, 0);
         card.addView(logBox);
 
+        LinearLayout logBtns = new LinearLayout(this);
+        logBtns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        llp.topMargin = Ui.dp(this, 12);
+        logBtns.setLayoutParams(llp);
+
+        TextView tagBtn = Ui.pill(this, t, "标记号码", true);
+        tagBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                askNumberThenTag();
+            }
+        });
+        logBtns.addView(tagBtn);
+
         TextView clear = Ui.pill(this, t, "清空记录", false);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = Ui.dp(this, 12);
+        clp.leftMargin = Ui.dp(this, 8);
         clear.setLayoutParams(clp);
         clear.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -49,7 +65,9 @@ public class RecordsActivity extends BasePageActivity {
                 renderLogs();
             }
         });
-        card.addView(clear);
+        logBtns.addView(clear);
+
+        card.addView(logBtns);
         content.addView(card);
 
         content.addView(serviceCard());
@@ -117,7 +135,7 @@ public class RecordsActivity extends BasePageActivity {
         spam.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                preview("我的号码库", "绍兴 · 电信　138 0013 8000", true);
+                preview("疑似骚扰电话", "绍兴 · 电信　138 0013 8000", true);
             }
         });
         btns.addView(spam);
@@ -826,8 +844,18 @@ public class RecordsActivity extends BasePageActivity {
         }
         int n = Math.min(logs.size(), 40);
         for (int i = 0; i < n; i++) {
-            TextView tv = Ui.text(this, t, logs.get(i), 12, t.text);
+            final String line = logs.get(i);
+            TextView tv = Ui.text(this, t, line, 12, t.text);
             tv.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+            final String num = numberFrom(line);
+            if (num.length() >= 3) {
+                tv.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        askTag(num);
+                    }
+                });
+            }
             logBox.addView(tv);
             if (i < n - 1) logBox.addView(Ui.divider(this, t));
         }
@@ -836,6 +864,67 @@ public class RecordsActivity extends BasePageActivity {
             more.setPadding(0, Ui.dp(this, 8), 0, 0);
             logBox.addView(more);
         }
+        TextView tip = Ui.sub(this, t, "点任意一条可以给这个号码打标签，下次来电直接显示");
+        tip.setPadding(0, Ui.dp(this, 10), 0, 0);
+        logBox.addView(tip);
+    }
+
+    /** 记录行格式：MM-dd HH:mm  号码  归属地  [处理结果]，取出第 2 段 */
+    private static String numberFrom(String line) {
+        try {
+            String[] parts = line.split("\\s{2,}");
+            if (parts.length >= 2) {
+                String d = NumUtil.clean(parts[1]);
+                if (d.length() >= 3) return d;
+            }
+        } catch (Throwable ignored) {
+        }
+        return "";
+    }
+
+    private void askNumberThenTag() {
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("输入完整号码，如 17303642680");
+        input.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("标记号码")
+                .setView(input)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("下一步", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int which) {
+                        String num = NumUtil.clean(input.getText().toString());
+                        if (num.length() < 3) {
+                            toast("号码不完整");
+                            return;
+                        }
+                        askTag(num);
+                    }
+                })
+                .show();
+    }
+
+    /** 给号码打标签；再点一次可以改或清除 */
+    private void askTag(final String num) {
+        final String current = Tags.get(this, num);
+        String title = num + (current == null ? "" : "　现在：" + current);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(Tags.CHOICES, new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int which) {
+                        String label = Tags.CHOICES[which];
+                        if ("清除标记".equals(label)) {
+                            Tags.remove(RecordsActivity.this, num);
+                            toast("已清除标记");
+                        } else {
+                            Tags.put(RecordsActivity.this, num, label);
+                            toast("已标记「" + label + "」，下次来电直接显示");
+                        }
+                        renderLogs();
+                    }
+                })
+                .show();
     }
 
     @Override

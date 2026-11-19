@@ -199,12 +199,16 @@ public class Watcher extends Service {
 
     private String label(String digits) {
         try {
-            if (Blacklist.matchExact(this, digits) != null) return "我的号码库";
+            // 用户自己标的优先级最高：他接过、知道是谁
+            String tag = Tags.get(this, digits);
+            if (tag != null) return tag;
+
+            if (Blacklist.matchExact(this, digits) != null) return Tags.SPAM;
             String y = Yellow.label(this, digits);
             if (y != null) return y;
-            if (Blacklist.match(this, digits) != null) return "我的号码库";
+            if (Blacklist.match(this, digits) != null) return Tags.SPAM;
             String cache = MarkCache.get(this, digits);
-            if (cache != null) return "我的号码库";
+            if (cache != null) return Tags.SPAM;
         } catch (Throwable ignored) {
         }
         return null;
@@ -234,7 +238,7 @@ public class Watcher extends Service {
         Trace.add(this, "watcher", "显示 " + l[0] + " / " + l[1]
                 + " · 悬浮窗=" + (ovOn && ovOk) + " 通知=" + ntOn);
         // holdMs = 0：不按时间收，等接听/挂断的状态变化再收
-        if (ovOn && ovOk) Overlay.show(this, l[0], l[1], mark != null, 0);
+        if (ovOn && ovOk) Overlay.show(this, l[0], l[1], Tags.warn(mark), 0);
         if (ntOn) Notify.show(this, l[0], l[1]);
         try {
             LogStore.add(this, digits, area, mark == null ? "兼容模式·提示" : "兼容模式·" + mark);

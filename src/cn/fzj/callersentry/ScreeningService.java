@@ -66,14 +66,14 @@ public class ScreeningService extends CallScreeningService {
             boolean spam = false;
 
             if (exactHit != null) {
-                mark = "我的号码库";
+                mark = Tags.SPAM;
                 spam = true;
             } else if (yellow != null) {
                 mark = yellow;
             } else {
                 String ruleHit = Blacklist.match(this, digits);
                 if (ruleHit != null) {
-                    mark = "我的号码库";
+                    mark = Tags.SPAM;
                     spam = true;
                 } else {
                     mark = MarkCache.get(this, digits);
