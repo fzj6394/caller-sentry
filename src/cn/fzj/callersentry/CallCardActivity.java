@@ -241,9 +241,9 @@ public class CallCardActivity extends Activity {
     private int[] palette(boolean warn, int alpha) {
         int a = (alpha & 0xFF) << 24;
         if (warn) {
-            return new int[]{a | 0xFFB4A6, a | 0xFFD9A0, a | 0xFF9FB0, a | 0xFFC9A8, a | 0xFFB4A6};
+            return new int[]{a | 0xFFCFC2, a | 0xFF8F73, a | 0xFF7FA2, a | 0xFFA96B, a | 0xFFCFC2};
         }
-        return new int[]{a | 0xFFFFFF, a | 0xCFE6FF, a | 0xE6D4FF, a | 0xC6F3E6, a | 0xFFFFFF};
+        return new int[]{a | 0xF2FAFF, a | 0x7FD8FF, a | 0xC0A6FF, a | 0x7FF0CE, a | 0xF2FAFF};
     }
 
     @Override

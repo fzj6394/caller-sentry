@@ -25,6 +25,7 @@ public class GlowText extends TextView {
     private final Matrix matrix = new Matrix();
     private ValueAnimator anim;
     private int[] colors;
+    private float span;
     private boolean marquee;
     private float phase;
 
@@ -49,6 +50,9 @@ public class GlowText extends TextView {
     /** 传一组颜色，沿文字横向循环扫过；至少两个 */
     public GlowText colors(int... cs) {
         this.colors = cs;
+        this.gradient = null;
+        if (getWidth() > 0) build(getWidth());
+        invalidate();
         return this;
     }
 
@@ -73,8 +77,10 @@ public class GlowText extends TextView {
 
     private void build(int w) {
         if (w <= 0 || colors == null || colors.length < 2) return;
-        // 渐变宽度取两倍控件宽，扫过去时不会看到硬边
-        gradient = new LinearGradient(0, 0, w * 2f, 0, colors, null, Shader.TileMode.CLAMP);
+        // 色带只比控件略宽：色带越长，纯色停留越久，一帧被抓到就整块发白。
+        // MIRROR 让它首尾相接来回折，任何时刻文字上都压着颜色，不会跑空。
+        span = Math.max(1f, w * 0.9f);
+        gradient = new LinearGradient(0, 0, span, 0, colors, null, Shader.TileMode.MIRROR);
         gradient.setLocalMatrix(matrix);
         getPaint().setShader(gradient);
     }
@@ -119,8 +125,9 @@ public class GlowText extends TextView {
         if (gradient == null) return;
         float t = f + phase;
         t = t - (float) Math.floor(t);
-        // 从完全移出左侧扫到完全移出右侧
-        matrix.setTranslate(t * w * 3f - w * 2f, 0);
+        if (span <= 0) span = Math.max(1f, w * 0.9f);
+        // 平移位一个色带宽度：MIRROR 下与起点完全重合，切换无跳变
+        matrix.setTranslate(t * span * 2f, 0);
         gradient.setLocalMatrix(matrix);
         getPaint().setShader(gradient);
         invalidate();
