@@ -144,6 +144,11 @@ public class Watcher extends Service {
             String state = in.getStringExtra(TelephonyManager.EXTRA_STATE);
             if (!TelephonyManager.EXTRA_STATE_RINGING.equals(state)) {
                 Trace.add(this, "watcher", "状态=" + state);
+                // 接听（OFFHOOK）或挂断/未接（IDLE）都收起提示条
+                if (TelephonyManager.EXTRA_STATE_OFFHOOK.equals(state)
+                        || TelephonyManager.EXTRA_STATE_IDLE.equals(state)) {
+                    Overlay.hide();
+                }
                 return;
             }
             String raw = in.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER);
@@ -228,7 +233,8 @@ public class Watcher extends Service {
         boolean ntOn = Prefs.notifyOn(this);
         Trace.add(this, "watcher", "显示 " + l[0] + " / " + l[1]
                 + " · 悬浮窗=" + (ovOn && ovOk) + " 通知=" + ntOn);
-        if (ovOn && ovOk) Overlay.show(this, l[0], l[1], mark != null);
+        // holdMs = 0：不按时间收，等接听/挂断的状态变化再收
+        if (ovOn && ovOk) Overlay.show(this, l[0], l[1], mark != null, 0);
         if (ntOn) Notify.show(this, l[0], l[1]);
         try {
             LogStore.add(this, digits, area, mark == null ? "兼容模式·提示" : "兼容模式·" + mark);

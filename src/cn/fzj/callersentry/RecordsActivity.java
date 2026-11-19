@@ -91,8 +91,8 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(open);
 
         TextView hint = Ui.sub(this, t,
-                "点按钮，屏幕上方会出现 7 秒提示，位置和样式与真实来电一致。"
-                        + "真来电时也只有这 7 秒，屏幕朝下或放兜里就看不到。");
+                "点按钮，屏幕上方会出现 7 秒提示，样式与真实来电一致。"
+                        + "真来电时会一直显示到接听或挂断，不会提前消失。");
         hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
