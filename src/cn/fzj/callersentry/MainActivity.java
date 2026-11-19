@@ -183,6 +183,39 @@ public class MainActivity extends Activity {
         buttons.addView(keep);
 
         card.addView(buttons);
+
+        // 第二行：兼容模式（不依赖拦截角色）
+        LinearLayout buttons2 = new LinearLayout(this);
+        buttons2.setOrientation(LinearLayout.HORIZONTAL);
+        buttons2.setPadding(0, Ui.dp(this, 8), 0, 0);
+
+        final boolean compatNow = Prefs.sp(this).getBoolean("compat_on", false);
+        final TextView compat = Ui.pill(this, t, compatNow ? "兼容模式：开" : "兼容模式：关", compatNow);
+        compat.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean on = Prefs.sp(MainActivity.this).getBoolean("compat_on", false);
+                if (on) {
+                    Watcher.stop(MainActivity.this);
+                    compat.setText("兼容模式：关");
+                    toast("兼容模式已关闭");
+                } else {
+                    Watcher.start(MainActivity.this);
+                    compat.setText("兼容模式：开");
+                    toast("已开启：状态栏会有一条常驻通知，来电时提示归属地");
+                }
+            }
+        });
+        buttons2.addView(compat);
+
+        TextView compatHint = Ui.sub(this, t, "拦截服务被系统挡住时用这个");
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hl.leftMargin = Ui.dp(this, 10);
+        compatHint.setLayoutParams(hl);
+        buttons2.addView(compatHint);
+
+        card.addView(buttons2);
         parent.addView(card);
     }
 
