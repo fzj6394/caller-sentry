@@ -36,6 +36,7 @@ public final class Overlay {
     private static TextView overView;
     private static TextView titleView;
     private static GlowText glowView;
+    private static GlowText subGlow;
     private static TextView subView;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static Runnable pendingHide;
@@ -92,6 +93,7 @@ public final class Overlay {
 
         LinearLayout box = new LinearLayout(c);
         box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
         box.setPadding(dp(c, 18), dp(c, 13), dp(c, 18), dp(c, 14));
 
         // 无描边的一层深色玻璃：透出底下的来电界面，又不至于把字糊掉
@@ -102,37 +104,30 @@ public final class Overlay {
         box.setElevation(dp(c, 10));
 
         if (overline != null && overline.length() > 0) {
-            overView = label(c, overline, warn ? 0xCCFFB4A6 : 0xA6FFFFFF, dp(c, 5));
-            box.addView(overView);
+            GlowText over = glow(c, overline, 11, 0xB3, warn, 0.66f);
+            over.setLetterSpacing(0.26f);
+            over.setPadding(0, 0, 0, dp(c, 5));
+            box.addView(over);
+            overView = over;
         } else {
             overView = null;
         }
 
-        GlowText glow = new GlowText(c);
-        glow.setText(line1);
-        glow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        glow.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        glow.setGravity(Gravity.START);
-        glow.colors(warn
-                ? new int[]{0xFFFFB4A6, 0xFFFFD9A0, 0xFFFF9FB0, 0xFFFFC9A8, 0xFFFFB4A6}
-                : new int[]{0xFFFFFFFF, 0xFFCFE6FF, 0xFFE6D4FF, 0xFFC6F3E6, 0xFFFFFFFF});
-        glow.marquee(true);
-        glow.setLayoutParams(new LinearLayout.LayoutParams(
+        GlowText title = glow(c, line1, 18, 0xFF, warn, 0f);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        title.marquee(true);
+        title.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        box.addView(glow);
-        titleView = glow;
-        glowView = glow;
+        box.addView(title);
+        titleView = title;
+        glowView = title;
 
-        subView = new TextView(c);
-        subView.setText(line2);
-        subView.setTextColor(0xB8FFFFFF);
-        subView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
-        subView.setGravity(Gravity.START);
-        subView.setLetterSpacing(0.10f);
-        subView.setMaxLines(1);
-        subView.setEllipsize(TextUtils.TruncateAt.END);
-        subView.setPadding(0, dp(c, 4), 0, 0);
-        box.addView(subView);
+        GlowText sub = glow(c, line2, 12.5f, 0xE6, warn, 0.42f);
+        sub.setLetterSpacing(0.10f);
+        sub.setPadding(0, dp(c, 4), 0, 0);
+        box.addView(sub);
+        subView = sub;
+        subGlow = sub;
 
         int screenW = c.getResources().getDisplayMetrics().widthPixels;
         int width = Math.min(screenW - dp(c, 64), dp(c, 300));
@@ -152,7 +147,8 @@ public final class Overlay {
         try {
             wm.addView(box, lp);
             current = box;
-            if (glowView != null) glowView.startGlow();
+            if (glowView != null) glowView.startGlow(glowView.phase());
+            if (subGlow != null) subGlow.startGlow(subGlow.phase());
             Trace.add(c, "overlay", "addView 成功：" + line1);
         } catch (Throwable e) {
             Trace.add(c, "overlay", "addView 失败 " + e.getClass().getSimpleName()
@@ -176,18 +172,27 @@ public final class Overlay {
         MAIN.postDelayed(pendingHide, delay);
     }
 
-    /** 顶部小字：字距拉开、字号压小，只做分类提示，不抢主行 */
-    private static TextView label(Context c, String text, int color, int padBottom) {
-        TextView tv = new TextView(c);
+    /** 一行居中、带流光的文字 */
+    private static GlowText glow(Context c, String text, float sp, int alpha,
+                                 boolean warn, float phase) {
+        GlowText tv = new GlowText(c);
         tv.setText(text);
-        tv.setTextColor(color);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        tv.setLetterSpacing(0.26f);
-        tv.setGravity(Gravity.START);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        tv.setGravity(Gravity.CENTER);
         tv.setMaxLines(1);
-        tv.setEllipsize(TextUtils.TruncateAt.END);
-        tv.setPadding(0, 0, 0, padBottom);
+        tv.colors(palette(warn, alpha));
+        tv.setPhase(phase);
+        tv.setShadowLayer(dp(c, 6), 0, dp(c, 1), 0x59000000);
         return tv;
+    }
+
+    /** 一条色带：正常冰蓝/浅紫/薄荷，骚扰走暖红系 */
+    private static int[] palette(boolean warn, int alpha) {
+        int a = (alpha & 0xFF) << 24;
+        if (warn) {
+            return new int[]{a | 0xFFB4A6, a | 0xFFD9A0, a | 0xFF9FB0, a | 0xFFC9A8, a | 0xFFB4A6};
+        }
+        return new int[]{a | 0xFFFFFF, a | 0xCFE6FF, a | 0xE6D4FF, a | 0xC6F3E6, a | 0xFFFFFF};
     }
 
     private static void cancelPendingHide() {
@@ -216,11 +221,13 @@ public final class Overlay {
         } catch (Throwable ignored) {
         }
         if (glowView != null) glowView.stopGlow();
+        if (subGlow != null) subGlow.stopGlow();
         current = null;
         overView = null;
         titleView = null;
         subView = null;
         glowView = null;
+        subGlow = null;
     }
 
     /** 归属地算出来得晚一点时（冷启动），先把号码显示出来，回头把文字补上。 */

@@ -26,6 +26,7 @@ public class GlowText extends TextView {
     private ValueAnimator anim;
     private int[] colors;
     private boolean marquee;
+    private float phase;
 
     public GlowText(Context c) {
         super(c);
@@ -35,16 +36,31 @@ public class GlowText extends TextView {
         setMarqueeRepeatLimit(-1);
     }
 
+    /** 起始相位：让多行错开，避免整块一起闪 */
+    public GlowText setPhase(float p) {
+        phase = p - (float) Math.floor(p);
+        return this;
+    }
+
+    public float phase() {
+        return phase;
+    }
+
     /** 传一组颜色，沿文字横向循环扫过；至少两个 */
     public GlowText colors(int... cs) {
         this.colors = cs;
         return this;
     }
 
-    /** 开跑马灯：文本真的超宽才滚，短文本静止 */
+    /** 开跑马灯：文本真的超宽才滚，短文本静止；关掉则直接截断加省略号 */
     public GlowText marquee(boolean on) {
         this.marquee = on;
-        if (on) setSelected(true);
+        if (on) {
+            setSelected(true);
+        } else {
+            setSelected(false);
+            setEllipsize(TextUtils.TruncateAt.END);
+        }
         return this;
     }
 
@@ -64,7 +80,13 @@ public class GlowText extends TextView {
     }
 
     public void startGlow() {
+        startGlow(0f);
+    }
+
+    /** @param p 起始相位 0~1，用于让多行文字的流光错开，不同步就自然 */
+    public void startGlow(float p) {
         if (colors == null) return;
+        phase = p - (float) Math.floor(p);
         stopGlow();
         anim = ValueAnimator.ofFloat(0f, 1f);
         anim.setDuration(2600L);
@@ -95,8 +117,10 @@ public class GlowText extends TextView {
         if (w <= 0) return;
         if (gradient == null) build(w);
         if (gradient == null) return;
+        float t = f + phase;
+        t = t - (float) Math.floor(t);
         // 从完全移出左侧扫到完全移出右侧
-        matrix.setTranslate(f * w * 3f - w * 2f, 0);
+        matrix.setTranslate(t * w * 3f - w * 2f, 0);
         gradient.setLocalMatrix(matrix);
         getPaint().setShader(gradient);
         invalidate();
