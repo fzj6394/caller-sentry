@@ -35,6 +35,7 @@ public final class Overlay {
     private static View current;
     private static TextView overView;
     private static TextView titleView;
+    private static GlowText glowView;
     private static TextView subView;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static Runnable pendingHide;
@@ -107,16 +108,20 @@ public final class Overlay {
             overView = null;
         }
 
-        titleView = new TextView(c);
-        titleView.setText(line1);
-        titleView.setTextColor(warn ? 0xFFFFB4A6 : 0xFFFFFFFF);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
-        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        titleView.setGravity(Gravity.START);
-        titleView.setMaxLines(1);
-        titleView.setEllipsize(TextUtils.TruncateAt.END);
-        titleView.setShadowLayer(dp(c, 6), 0, dp(c, 1), 0x59000000);
-        box.addView(titleView);
+        GlowText glow = new GlowText(c);
+        glow.setText(line1);
+        glow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        glow.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        glow.setGravity(Gravity.START);
+        glow.colors(warn
+                ? new int[]{0xFFFFB4A6, 0xFFFFD9A0, 0xFFFF9FB0, 0xFFFFC9A8, 0xFFFFB4A6}
+                : new int[]{0xFFFFFFFF, 0xFFCFE6FF, 0xFFE6D4FF, 0xFFC6F3E6, 0xFFFFFFFF});
+        glow.marquee(true);
+        glow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        box.addView(glow);
+        titleView = glow;
+        glowView = glow;
 
         subView = new TextView(c);
         subView.setText(line2);
@@ -130,7 +135,7 @@ public final class Overlay {
         box.addView(subView);
 
         int screenW = c.getResources().getDisplayMetrics().widthPixels;
-        int width = Math.min(screenW - dp(c, 64), dp(c, 330));
+        int width = Math.min(screenW - dp(c, 64), dp(c, 300));
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 width,
@@ -147,6 +152,7 @@ public final class Overlay {
         try {
             wm.addView(box, lp);
             current = box;
+            if (glowView != null) glowView.startGlow();
             Trace.add(c, "overlay", "addView 成功：" + line1);
         } catch (Throwable e) {
             Trace.add(c, "overlay", "addView 失败 " + e.getClass().getSimpleName()
@@ -155,6 +161,7 @@ public final class Overlay {
             overView = null;
             titleView = null;
             subView = null;
+            glowView = null;
             return;
         }
 
@@ -208,10 +215,12 @@ public final class Overlay {
             if (wm != null) wm.removeView(current);
         } catch (Throwable ignored) {
         }
+        if (glowView != null) glowView.stopGlow();
         current = null;
         overView = null;
         titleView = null;
         subView = null;
+        glowView = null;
     }
 
     /** 归属地算出来得晚一点时（冷启动），先把号码显示出来，回头把文字补上。 */

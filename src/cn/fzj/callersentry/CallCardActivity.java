@@ -44,6 +44,7 @@ public class CallCardActivity extends Activity {
 
     private TextView overView;
     private TextView titleView;
+    private GlowText glowTitle;
     private TextView subView;
     private BroadcastReceiver rx;
     private final Runnable autoClose = new Runnable() {
@@ -135,10 +136,12 @@ public class CallCardActivity extends Activity {
         try {
             String over = intent.getStringExtra("over");
             if (overView != null && over != null && over.length() > 0) overView.setText(over);
-            if (titleView != null) {
-                titleView.setText(intent.getStringExtra("l1"));
-                titleView.setTextColor(intent.getBooleanExtra("warn", false)
-                        ? 0xFFFFB4A6 : 0xFFFFFFFF);
+            boolean warnNow = intent.getBooleanExtra("warn", false);
+            if (titleView != null) titleView.setText(intent.getStringExtra("l1"));
+            if (glowTitle != null) {
+                glowTitle.colors(warnNow
+                        ? new int[]{0xFFFFB4A6, 0xFFFFD9A0, 0xFFFF9FB0, 0xFFFFC9A8, 0xFFFFB4A6}
+                        : new int[]{0xFFFFFFFF, 0xFFCFE6FF, 0xFFE6D4FF, 0xFFC6F3E6, 0xFFFFFFFF});
             }
             if (subView != null) subView.setText(intent.getStringExtra("l2"));
             MAIN.removeCallbacks(autoClose);
@@ -193,20 +196,23 @@ public class CallCardActivity extends Activity {
             block.addView(overView);
         }
 
-        titleView = new TextView(this);
-        titleView.setText(l1);
-        titleView.setTextColor(warn ? 0xFFFFB4A6 : 0xFFFFFFFF);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        titleView.setGravity(Gravity.START);
-        titleView.setMaxLines(1);
-        titleView.setEllipsize(TextUtils.TruncateAt.END);
-        titleView.setShadowLayer(dp(10), 0, dp(1), 0x8C000000);
+        GlowText glow = new GlowText(this);
+        glow.setText(l1);
+        glow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21);
+        glow.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        glow.setGravity(Gravity.START);
+        glow.setShadowLayer(dp(10), 0, dp(1), 0x8C000000);
+        glow.colors(warn
+                ? new int[]{0xFFFFB4A6, 0xFFFFD9A0, 0xFFFF9FB0, 0xFFFFC9A8, 0xFFFFB4A6}
+                : new int[]{0xFFFFFFFF, 0xFFCFE6FF, 0xFFE6D4FF, 0xFFC6F3E6, 0xFFFFFFFF});
+        glow.marquee(true);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = dp(5);
-        titleView.setLayoutParams(tlp);
-        block.addView(titleView);
+        glow.setLayoutParams(tlp);
+        block.addView(glow);
+        titleView = glow;
+        glowTitle = glow;
 
         subView = new TextView(this);
         subView.setText(l2);
@@ -223,8 +229,9 @@ public class CallCardActivity extends Activity {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
 
+        // 窄一档：只占屏幕约 2/3，右侧留白，长文本靠跑马灯看完
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                Math.min(screenW - dp(52), dp(400)), ViewGroup.LayoutParams.WRAP_CONTENT);
+                Math.min((int) (screenW * 0.66f), dp(272)), ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         lp.topMargin = (int) (screenH * 0.26f);
         block.setLayoutParams(lp);
@@ -252,12 +259,14 @@ public class CallCardActivity extends Activity {
         } catch (Throwable ignored) {
             rx = null;
         }
+        if (glowTitle != null) glowTitle.startGlow();
         MAIN.removeCallbacks(autoClose);
         MAIN.postDelayed(autoClose, 120_000L);
     }
 
     @Override
     protected void onStop() {
+        if (glowTitle != null) glowTitle.stopGlow();
         if (rx != null) {
             try {
                 unregisterReceiver(rx);
