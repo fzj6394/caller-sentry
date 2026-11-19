@@ -18,7 +18,7 @@ import java.util.Locale;
  */
 public class App extends Application {
 
-    static final String VERSION = "2.5.7";
+    static final String VERSION = "2.5.8";
     static final String CRASH_FILE = "crash.txt";
 
     @Override

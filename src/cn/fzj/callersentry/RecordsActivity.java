@@ -209,6 +209,24 @@ public class RecordsActivity extends BasePageActivity {
             }
         });
         btns.addView(batt);
+
+        TextView zero = Ui.pill(this, t, "清零计数", false);
+        LinearLayout.LayoutParams zlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        zlp.leftMargin = Ui.dp(this, 8);
+        zero.setLayoutParams(zlp);
+        zero.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Prefs.sp(RecordsActivity.this).edit()
+                        .remove("svc_count").remove("svc_in").remove("svc_dir")
+                        .remove("svc_last").remove("bind_count").remove("bind_last")
+                        .apply();
+                refreshServiceInfo();
+                toast("计数已清零，接一通电话再看");
+            }
+        });
+        btns.addView(zero);
         card.addView(btns);
         return card;
     }
@@ -278,8 +296,10 @@ public class RecordsActivity extends BasePageActivity {
         LinearLayout card = Ui.card(this, t);
         card.addView(Ui.title(this, t, "备用通道自测"));
 
-        TextView desc = Ui.sub(this, t,
-                "拦截角色被三星挡住时，还有一条路：监听系统通话状态广播。"
+        int done = Prefs.sp(this).getInt("svc_count", 0);
+        TextView desc = Ui.sub(this, t, done > 0
+                ? "拦截服务已经能收到来电（累计 " + done + " 次），本项可以忽略。"
+                : "拦截角色被三星挡住时，还有一条路：监听系统通话状态广播。"
                         + "它不需要拦截角色，但能不能拿到号码要看系统给不给。"
                         + "\n点按钮，然后用另一部电话打进来一次，本页保持在前台就行。");
         desc.setPadding(0, Ui.dp(this, 6), 0, 0);
@@ -440,7 +460,7 @@ public class RecordsActivity extends BasePageActivity {
                 ? "❌ 从未被调用" : "✅ " + clock(last) + "（" + ago(last) + "）");
 
         if (last != 0) {
-            sb.append("　").append(dir == 1 ? "来电" : dir == 2 ? "拨出" : "未知方向");
+            sb.append("　").append(dir == 0 ? "来电" : dir == 1 ? "拨出" : "未知方向");
         }
 
         sb.append("\n累计调用：").append(total).append(" 次");

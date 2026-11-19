@@ -244,13 +244,22 @@ public class ScreeningService extends CallScreeningService {
     private void touch(Call.Details details) {
         try {
             long now = System.currentTimeMillis();
-            int dir = details.getCallDirection();
+            // 存归一化后的方向：0 来电 / 1 拨出 / -1 未知。
+            // 注意 Call.Details 与 CallLog 的常量不一样，前者 INCOMING = 0、OUTGOING = 1。
+            int raw = details.getCallDirection();
+            int dir = raw == Call.Details.DIRECTION_INCOMING ? 0
+                    : raw == Call.Details.DIRECTION_OUTGOING ? 1 : -1;
+
             int total = Prefs.sp(this).getInt("svc_count", 0) + 1;
             android.content.SharedPreferences.Editor e = Prefs.sp(this).edit()
                     .putLong("svc_last", now)
                     .putInt("svc_count", total)
                     .putInt("svc_dir", dir);
-            if (dir == Call.Details.DIRECTION_INCOMING) {
+            // onCreate 的记账是异步落盘的，极端情况下会被系统回收吞掉，这里补一次
+            if (Prefs.sp(this).getInt("bind_count", 0) == 0) {
+                e.putInt("bind_count", 1).putLong("bind_last", now);
+            }
+            if (dir == 0) {
                 e.putInt("svc_in", Prefs.sp(this).getInt("svc_in", 0) + 1);
             }
             e.apply();
