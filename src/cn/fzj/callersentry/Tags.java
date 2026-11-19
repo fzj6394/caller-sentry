@@ -77,6 +77,15 @@ public final class Tags {
         if (m.remove(num) != null) save(c, m);
     }
 
+    /** 全部标签，供批量操作遍历 */
+    public static Map<String, String> entries(Context c) {
+        return load(c);
+    }
+
+    public static boolean hasAny(Context c) {
+        return !load(c).isEmpty();
+    }
+
     /** 这个标签要不要按"警示"样式显示 */
     public static boolean warn(String label) {
         if (label == null) return false;

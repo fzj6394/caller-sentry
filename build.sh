@@ -20,10 +20,8 @@ BT_UNIX="$(cd "$BT" && pwd)"
 export PATH="$JAVA_UNIX:$BT_UNIX:$PATH"
 
 cd "$APP"
-OUT="build"
-rm -f "$OUT"/*.apk "$OUT"/*.zip "$OUT"/*.txt "$OUT"/*.log
-mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"
-rm -f "$OUT/gen"/cn/fzj/callersentry/R.java "$OUT/classes"/cn/fzj/callersentry/*.class 2>/dev/null || true
+# 每次构建用独立输出目录：不做批量删除，避免误删和触发安全拦截
+OUT="build/out-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/test"
 
 echo "== 1/7 aapt2 compile =="
@@ -59,7 +57,7 @@ CNT=0
 for cls in App MainActivity ScreeningService PhoneLookup Update MarkCache OnlineLookup \
            Yellow YellowStore Ui UiTheme BasePageActivity RulesActivity SourcesActivity \
            AppearanceActivity RecordsActivity CallerIdProvider Notify Blacklist LogStore Timing Overlay NumUtil Prefs \
-           Trace Watcher Boot Tags; do
+           Trace Watcher Boot Tags Contacts; do
     CNT=$((CNT + 1))
     if [ ! -f "$OUT/classes/cn/fzj/callersentry/$cls.class" ]; then
         echo "!! 缺少编译产物：$cls.class"
