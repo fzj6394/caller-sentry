@@ -53,6 +53,7 @@ public class RecordsActivity extends BasePageActivity {
         content.addView(card);
 
         content.addView(serviceCard());
+        content.addView(watchCard());
         content.addView(previewCard());
         content.addView(crashCard());
         content.addView(timingCard());
@@ -252,6 +253,167 @@ public class RecordsActivity extends BasePageActivity {
             sb.append("探测失败：").append(e);
         }
         return sb.toString();
+    }
+
+    // ============ 备用通道自测：通话状态广播（不依赖拦截角色）============
+
+    private TextView watchInfo;
+    private android.content.BroadcastReceiver watchRx;
+    private long watchUntil;
+    private final android.os.Handler watchHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable watchTick = new Runnable() {
+        @Override
+        public void run() {
+            renderWatch();
+            if (watchUntil > 0 && System.currentTimeMillis() < watchUntil) {
+                watchHandler.postDelayed(this, 1000);
+            } else {
+                stopWatch(false);
+            }
+        }
+    };
+
+    private LinearLayout watchCard() {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "备用通道自测"));
+
+        TextView desc = Ui.sub(this, t,
+                "拦截角色被三星挡住时，还有一条路：监听系统通话状态广播。"
+                        + "它不需要拦截角色，但能不能拿到号码要看系统给不给。"
+                        + "\n点按钮，然后用另一部电话打进来一次，本页保持在前台就行。");
+        desc.setPadding(0, Ui.dp(this, 6), 0, 0);
+        card.addView(desc);
+
+        watchInfo = Ui.sub(this, t, "");
+        watchInfo.setPadding(0, Ui.dp(this, 10), 0, 0);
+        watchInfo.setLineSpacing(Ui.dp(this, 4), 1f);
+        card.addView(watchInfo);
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = Ui.dp(this, 12);
+        btns.setLayoutParams(blp);
+
+        TextView start = Ui.pill(this, t, "开始监听 60 秒", true);
+        start.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                askPhonePerms();
+            }
+        });
+        btns.addView(start);
+
+        TextView stop = Ui.pill(this, t, "停止", false);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        slp.leftMargin = Ui.dp(this, 8);
+        stop.setLayoutParams(slp);
+        stop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                stopWatch(true);
+            }
+        });
+        btns.addView(stop);
+        card.addView(btns);
+        return card;
+    }
+
+    private void askPhonePerms() {
+        java.util.ArrayList<String> need = new java.util.ArrayList<String>();
+        String[] all = new String[]{"android.permission.READ_PHONE_STATE",
+                "android.permission.READ_CALL_LOG"};
+        for (String p : all) {
+            try {
+                if (checkSelfPermission(p) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    need.add(p);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (!need.isEmpty()) {
+            requestPermissions(need.toArray(new String[0]), 302);
+            return;
+        }
+        startWatch();
+    }
+
+    private void startWatch() {
+        if (watchRx != null) return;
+        Prefs.sp(this).edit().putInt("watch_count", 0)
+                .putString("watch_state", "").putString("watch_num", "").apply();
+        watchRx = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context c, Intent in) {
+                try {
+                    String st = in.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE);
+                    String num = in.getStringExtra(
+                            android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER);
+                    int n = Prefs.sp(RecordsActivity.this).getInt("watch_count", 0) + 1;
+                    Prefs.sp(RecordsActivity.this).edit()
+                            .putInt("watch_count", n)
+                            .putString("watch_state", st == null ? "?" : st)
+                            .putString("watch_num", num == null ? "" : num)
+                            .apply();
+                    renderWatch();
+                } catch (Throwable ignored) {
+                }
+            }
+        };
+        try {
+            registerReceiver(watchRx, new android.content.IntentFilter(
+                    android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED));
+        } catch (Throwable e) {
+            watchRx = null;
+            toast("注册失败：" + e);
+            return;
+        }
+        watchUntil = System.currentTimeMillis() + 60_000L;
+        watchHandler.post(watchTick);
+    }
+
+    private void stopWatch(boolean say) {
+        watchUntil = 0;
+        watchHandler.removeCallbacks(watchTick);
+        if (watchRx != null) {
+            try {
+                unregisterReceiver(watchRx);
+            } catch (Throwable ignored) {
+            }
+            watchRx = null;
+        }
+        renderWatch();
+        if (say) toast("已停止监听");
+    }
+
+    private void renderWatch() {
+        if (watchInfo == null) return;
+        int n = Prefs.sp(this).getInt("watch_count", 0);
+        String st = Prefs.sp(this).getString("watch_state", "");
+        String num = Prefs.sp(this).getString("watch_num", "");
+
+        StringBuilder sb = new StringBuilder();
+        if (watchRx != null) {
+            long left = Math.max(0, (watchUntil - System.currentTimeMillis()) / 1000);
+            sb.append("监听中… 剩余 ").append(left).append(" 秒");
+        } else {
+            sb.append("未监听");
+        }
+        sb.append("\n收到事件：").append(n).append(" 个");
+        if (n > 0) {
+            sb.append("\n状态：").append(st.length() == 0 ? "?" : st);
+            sb.append("\n号码：").append(num.length() == 0 ? "❌ 空（系统没给）" : "✅ " + num);
+        }
+        watchInfo.setText(sb.toString());
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopWatch(false);
+        super.onDestroy();
     }
 
     private void refreshServiceInfo() {
@@ -454,6 +616,15 @@ public class RecordsActivity extends BasePageActivity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] grant) {
         super.onRequestPermissionsResult(code, perms, grant);
         if (code == 301) recreate();
+        if (code == 302) {
+            boolean ok = true;
+            for (int g : grant) if (g != android.content.pm.PackageManager.PERMISSION_GRANTED) ok = false;
+            if (ok) {
+                startWatch();
+            } else {
+                toast("两个权限都给了才能测：电话 + 通话记录");
+            }
+        }
     }
 
     private LinearLayout crashCard() {
@@ -542,6 +713,7 @@ public class RecordsActivity extends BasePageActivity {
     protected void onPageResume() {
         renderLogs();
         refreshServiceInfo();
+        renderWatch();
         if (overlayStatus != null) {
             boolean ov = Overlay.canDraw(this);
             boolean nt = Notify.allowed(this);
