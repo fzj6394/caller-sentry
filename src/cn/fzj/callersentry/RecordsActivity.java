@@ -181,10 +181,10 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(serviceInfo);
 
         TextView hint = Ui.sub(this, t,
-                "测试必须用另一部电话打进来：从本机拨出去的电话，系统根本不会交给拦截服务，"
-                        + "计数器永远是 0。\n"
-                        + "「服务绑定」有记录、「最近调用」为空 → 系统绑定了但没把电话交过来；"
-                        + "两行都是 0 → 服务被冻结或角色被收回。");
+                "上面「兼容模式」是这台机器上实际生效的通道，它涨数字就说明工作正常。\n"
+                        + "下面那行「拦截服务」在三星上永远是 0——系统把来电交给自家拨号器，"
+                        + "不会派发给第三方，这是系统限制，不是故障，也不影响上面的提示。\n"
+                        + "测试务必用另一部电话打进来：本机拨出去的电话不会触发任何计数。");
         hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
@@ -240,6 +240,7 @@ public class RecordsActivity extends BasePageActivity {
                 Prefs.sp(RecordsActivity.this).edit()
                         .remove("svc_count").remove("svc_in").remove("svc_dir")
                         .remove("svc_last").remove("bind_count").remove("bind_last")
+                        .remove("w_count").remove("w_last")
                         .apply();
                 refreshServiceInfo();
                 toast("计数已清零，接一通电话再看");
@@ -459,34 +460,31 @@ public class RecordsActivity extends BasePageActivity {
         if (serviceInfo == null) return;
         long bind = Prefs.sp(this).getLong("bind_last", 0L);
         int bindN = Prefs.sp(this).getInt("bind_count", 0);
-        long last = Prefs.sp(this).getLong("svc_last", 0L);
         int total = Prefs.sp(this).getInt("svc_count", 0);
-        int in = Prefs.sp(this).getInt("svc_in", 0);
-        int dir = Prefs.sp(this).getInt("svc_dir", 0);
         boolean held = roleHeld();
 
+        boolean running = Watcher.isRunning();
+        long wLast = Prefs.sp(this).getLong("w_last", 0L);
+        int wCount = Prefs.sp(this).getInt("w_count", 0);
+
         StringBuilder sb = new StringBuilder();
-        sb.append("拦截角色：").append(held ? "✅ 已授予" : "❌ 未授予，来电不会被处理");
 
-        sb.append("\n后台限制：").append(bgRestricted()
-                ? "❌ 受限，三星会冻结本应用" : "✅ 不受限");
+        // —— 实际生效的通道 ——
+        sb.append("兼容模式：").append(running ? "✅ 运行中" : "❌ 未运行");
+        if (!running) sb.append("（打开一次 App 会自动恢复）");
+        sb.append("\n最近来电：").append(wLast == 0
+                ? "还没有（接一通电话试试）"
+                : clock(wLast) + "（" + ago(wLast) + "）");
+        sb.append("\n已处理：").append(wCount).append(" 通");
 
-        sb.append("\n服务绑定：").append(bind == 0
-                ? "❌ 系统从未绑定过"
-                : "✅ 共 " + bindN + " 次，最近 " + ago(bind));
-
-        sb.append("\n最近调用：").append(last == 0
-                ? "❌ 从未被调用" : "✅ " + clock(last) + "（" + ago(last) + "）");
-
-        if (last != 0) {
-            sb.append("　").append(dir == 0 ? "来电" : dir == 1 ? "拨出" : "未知方向");
-        }
-
-        sb.append("\n累计调用：").append(total).append(" 次");
-        if (total > 0) sb.append("（其中来电 ").append(in).append("）");
+        // —— 系统派发那条路：在三星上永远是 0，说清楚原因 ——
+        sb.append("\n\n拦截服务（备用通道，本机不可用）");
+        sb.append("\n　角色 ").append(held ? "已授予" : "未授予")
+                .append(" · 绑定 ").append(bindN).append(" 次")
+                .append(" · 调用 ").append(total).append(" 次");
 
         serviceInfo.setText(sb.toString());
-        serviceInfo.setTextColor(held && total > 0 ? t.textMuted : (held ? t.text : t.danger));
+        serviceInfo.setTextColor(running ? t.textMuted : t.danger);
     }
 
     private static String ago(long ts) {

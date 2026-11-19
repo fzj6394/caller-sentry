@@ -156,6 +156,7 @@ public class Watcher extends Service {
             final String digits = NumUtil.clean(raw);
             Trace.add(this, "watcher", "响铃 号码=" + (digits.length() == 0 ? "空" : digits));
             if (digits.length() == 0) return;
+            note();
 
             final String mark = label(digits);
             PhoneLookup lib = null;
@@ -194,6 +195,19 @@ public class Watcher extends Service {
             }
         } catch (Throwable t) {
             Trace.add(this, "watcher", "处理失败 " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    /** 兼容模式自己的计数：和拦截服务的 svc_* 分开，避免混为一谈 */
+    private void note() {
+        try {
+            long now = System.currentTimeMillis();
+            int n = Prefs.sp(this).getInt("w_count", 0) + 1;
+            Prefs.sp(this).edit()
+                    .putLong("w_last", now)
+                    .putInt("w_count", n)
+                    .apply();
+        } catch (Throwable ignored) {
         }
     }
 
