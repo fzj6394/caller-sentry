@@ -17,68 +17,98 @@ public class RecordsActivity extends BasePageActivity {
 
     @Override
     protected String pageTitle() {
-        return "拦截记录与诊断";
+        return "记录与诊断";
     }
 
     @Override
     protected String pageSubtitle() {
-        return "最近 80 条来电处理结果";
+        return "来电记录 · 处理耗时 · 诊断";
     }
 
     @Override
     protected void build(LinearLayout content) {
-        // 记录
+        content.addView(serviceCard());
+        content.addView(recordsCard());
+        content.addView(timingCard());
+        content.addView(traceCard());
+        content.addView(advancedCard());
+
+        advancedBox = new LinearLayout(this);
+        advancedBox.setOrientation(LinearLayout.VERTICAL);
+        advancedBox.setVisibility(View.GONE);
+        advancedBox.addView(watchCard());
+        advancedBox.addView(previewCard());
+        advancedBox.addView(probeCard());
+        advancedBox.addView(crashCard());
+        advancedBox.addView(directoryCard());
+        content.addView(advancedBox);
+    }
+
+    /** 记录卡：号码 + 时间/归属地 + 标签，右侧「标记」 */
+    private LinearLayout recordsCard() {
         LinearLayout card = Ui.card(this, t);
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
         logTitle = Ui.title(this, t, "记录");
-        card.addView(logTitle);
+        logTitle.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        head.addView(logTitle);
 
-        logBox = new LinearLayout(this);
-        logBox.setOrientation(LinearLayout.VERTICAL);
-        logBox.setPadding(0, Ui.dp(this, 8), 0, 0);
-        card.addView(logBox);
-
-        LinearLayout logBtns = new LinearLayout(this);
-        logBtns.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        llp.topMargin = Ui.dp(this, 12);
-        logBtns.setLayoutParams(llp);
-
-        TextView tagBtn = Ui.pill(this, t, "选号码标记", true);
-        tagBtn.setOnClickListener(new View.OnClickListener() {
+        TextView tagBtn = Ui.link(this, t, "选号码标记", new Runnable() {
             @Override
-            public void onClick(View v) {
+            public void run() {
                 pickNumber();
             }
         });
-        logBtns.addView(tagBtn);
+        head.addView(tagBtn);
 
-        TextView clear = Ui.pill(this, t, "清空记录", false);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        clp.leftMargin = Ui.dp(this, 8);
-        clear.setLayoutParams(clp);
-        clear.setOnClickListener(new View.OnClickListener() {
+        TextView clear = Ui.link(this, t, "清空", new Runnable() {
             @Override
-            public void onClick(View v) {
+            public void run() {
                 LogStore.clear(RecordsActivity.this);
                 renderLogs();
             }
         });
-        logBtns.addView(clear);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        clp.leftMargin = Ui.dp(this, 14);
+        clear.setLayoutParams(clp);
+        head.addView(clear);
 
-        card.addView(logBtns);
-        content.addView(card);
+        card.addView(head);
 
-        content.addView(serviceCard());
-        content.addView(watchCard());
-        content.addView(previewCard());
-        content.addView(crashCard());
-        content.addView(timingCard());
-        content.addView(traceCard());
-        content.addView(directoryCard());
+        logBox = new LinearLayout(this);
+        logBox.setOrientation(LinearLayout.VERTICAL);
+        logBox.setPadding(0, Ui.dp(this, 4), 0, 0);
+        card.addView(logBox);
+        return card;
     }
 
+    /** 高级诊断入口：默认收起，避免整页都是调试信息 */
+    private LinearLayout advancedCard() {
+        LinearLayout card = Ui.card(this, t);
+        LinearLayout row = Ui.item(this, t, "高级诊断", "拦截服务 / 自测 / 探测 ›", new Runnable() {
+            @Override
+            public void run() {
+                toggleAdvanced();
+            }
+        });
+        advancedValue = (TextView) row.getChildAt(1);
+        card.addView(row);
+        return card;
+    }
+
+    private void toggleAdvanced() {
+        if (advancedBox == null) return;
+        boolean show = advancedBox.getVisibility() != View.VISIBLE;
+        advancedBox.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (advancedValue != null) {
+            advancedValue.setText(show ? "收起" : "拦截服务 / 自测 / 探测 ›");
+        }
+    }
 
     /** 悬浮条预览：不用等真来电，点一下就能看到 7 秒提示 */
     private LinearLayout previewCard() {
@@ -170,22 +200,31 @@ public class RecordsActivity extends BasePageActivity {
         toast("看屏幕上方，7 秒后自动消失");
     }
 
-    /** 服务状态：判断系统的拦截服务到底有没有被调用过 */
+    /** 顶部摘要：兼容模式是否在跑、最近一通什么时候 */
     private LinearLayout serviceCard() {
         LinearLayout card = Ui.card(this, t);
-        card.addView(Ui.title(this, t, "服务状态"));
+
+        LinearLayout line = Ui.statusLine(this, t, "", 0xFF2FA84F);
+        statusDot = line.getChildAt(0);
+        statusTitle = (TextView) line.getChildAt(1);
+        card.addView(line);
 
         serviceInfo = Ui.sub(this, t, "");
         serviceInfo.setPadding(0, Ui.dp(this, 6), 0, 0);
         serviceInfo.setLineSpacing(Ui.dp(this, 4), 1f);
         card.addView(serviceInfo);
 
+        return card;
+    }
+
+    /** 系统侧探测：这个放高级里，平时不用看 */
+    private LinearLayout probeCard() {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "系统侧探测"));
+
         TextView hint = Ui.sub(this, t,
-                "上面「兼容模式」是这台机器上实际生效的通道，它涨数字就说明工作正常。\n"
-                        + "下面那行「拦截服务」在三星上永远是 0——系统把来电交给自家拨号器，"
-                        + "不会派发给第三方，这是系统限制，不是故障，也不影响上面的提示。\n"
-                        + "测试务必用另一部电话打进来：本机拨出去的电话不会触发任何计数。");
-        hint.setPadding(0, Ui.dp(this, 10), 0, 0);
+                "拦截服务在本机不可用，数字为 0 属正常；用另一部电话打进来才会产生计数。");
+        hint.setPadding(0, Ui.dp(this, 6), 0, 0);
         card.addView(hint);
 
         TextView probe = Ui.sub(this, t, screeningProbe());
@@ -458,33 +497,36 @@ public class RecordsActivity extends BasePageActivity {
 
     private void refreshServiceInfo() {
         if (serviceInfo == null) return;
-        long bind = Prefs.sp(this).getLong("bind_last", 0L);
-        int bindN = Prefs.sp(this).getInt("bind_count", 0);
-        int total = Prefs.sp(this).getInt("svc_count", 0);
-        boolean held = roleHeld();
-
         boolean running = Watcher.isRunning();
         long wLast = Prefs.sp(this).getLong("w_last", 0L);
         int wCount = Prefs.sp(this).getInt("w_count", 0);
+        int svcTotal = Prefs.sp(this).getInt("svc_count", 0);
+
+        if (statusTitle != null) {
+            statusTitle.setText(running ? "兼容模式运行中" : "兼容模式未运行");
+            statusTitle.setTextColor(running ? t.text : t.danger);
+        }
+        paintDot(statusDot, running ? 0xFF2FA84F : 0xFFD9483B);
 
         StringBuilder sb = new StringBuilder();
-
-        // —— 实际生效的通道 ——
-        sb.append("兼容模式：").append(running ? "✅ 运行中" : "❌ 未运行");
-        if (!running) sb.append("（打开一次 App 会自动恢复）");
-        sb.append("\n最近来电：").append(wLast == 0
-                ? "还没有（接一通电话试试）"
-                : clock(wLast) + "（" + ago(wLast) + "）");
-        sb.append("\n已处理：").append(wCount).append(" 通");
-
-        // —— 系统派发那条路：在三星上永远是 0，说清楚原因 ——
-        sb.append("\n\n拦截服务（备用通道，本机不可用）");
-        sb.append("\n　角色 ").append(held ? "已授予" : "未授予")
-                .append(" · 绑定 ").append(bindN).append(" 次")
-                .append(" · 调用 ").append(total).append(" 次");
+        sb.append(wLast == 0
+                ? "还没有接到来电"
+                : "最近 " + clock(wLast) + "（" + ago(wLast) + "）· 累计 " + wCount + " 通");
+        if (!running) sb.append("\n打开首页的兼容模式开关后，来电时会显示归属地");
+        sb.append("\n悬浮窗 ").append(Overlay.canDraw(this) ? "可用" : "未授权")
+                .append(" · 通知 ").append(Notify.allowed(this) ? "允许" : "关闭");
 
         serviceInfo.setText(sb.toString());
         serviceInfo.setTextColor(running ? t.textMuted : t.danger);
+    }
+
+    private void paintDot(View v, int color) {
+        if (v == null) return;
+        android.graphics.drawable.GradientDrawable d =
+                new android.graphics.drawable.GradientDrawable();
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setColor(color);
+        v.setBackground(d);
     }
 
     private static String ago(long ts) {
@@ -573,37 +615,43 @@ public class RecordsActivity extends BasePageActivity {
     /** 来电耗时：判定 / respond / 归属地 / 合计，用来验证优化有没有生效 */
     private LinearLayout timingCard() {
         LinearLayout card = Ui.card(this, t);
-        card.addView(Ui.title(this, t, "来电耗时（最近 10 通）"));
 
-        TextView hint = Ui.sub(this, t,
-                "「判定」是查黄页和号码库的耗时，「respond」是让来电界面出来的耗时，"
-                        + "「归属地」是算归属地的耗时。冷启动第一通通常最长。");
-        hint.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 8));
-        card.addView(hint);
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView title = Ui.title(this, t, "来电耗时");
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        head.addView(title);
+
+        head.addView(Ui.link(this, t, "清空", new Runnable() {
+            @Override
+            public void run() {
+                Timing.clear(RecordsActivity.this);
+                recreate();
+            }
+        }));
+        card.addView(head);
 
         java.util.List<String> rows = Timing.all(this);
         if (rows.isEmpty()) {
             TextView empty = Ui.sub(this, t, "还没有数据，接一通电话再看。");
+            empty.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 4));
             card.addView(empty);
-        } else {
-            for (String row : rows) {
-                TextView tv = Ui.text(this, t, row, 11, t.text);
-                tv.setPadding(0, Ui.dp(this, 5), 0, Ui.dp(this, 5));
-                card.addView(tv);
-            }
-            TextView clear = Ui.pill(this, t, "清空", false);
-            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            clp.topMargin = Ui.dp(this, 10);
-            clear.setLayoutParams(clp);
-            clear.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    Timing.clear(RecordsActivity.this);
-                    recreate();
-                }
-            });
-            card.addView(clear);
+            return card;
+        }
+
+        TextView hint = Ui.sub(this, t, "判定 = 查号码库；respond = 让来电界面出现；归属地 = 查号段库");
+        hint.setPadding(0, Ui.dp(this, 5), 0, Ui.dp(this, 6));
+        card.addView(hint);
+
+        int n = Math.min(rows.size(), 6);
+        for (int i = 0; i < n; i++) {
+            TextView tv = Ui.text(this, t, rows.get(i), 11, t.textMuted);
+            tv.setPadding(0, Ui.dp(this, 5), 0, Ui.dp(this, 5));
+            card.addView(tv);
+            if (i < n - 1) card.addView(thinDivider());
         }
         return card;
     }
@@ -722,6 +770,10 @@ public class RecordsActivity extends BasePageActivity {
     }
 
     private TextView traceInfo;
+    private View statusDot;
+    private TextView statusTitle;
+    private LinearLayout advancedBox;
+    private TextView advancedValue;
 
     /** 运行日志：来电链路上每一步的真实结果，出问题时直接发这段 */
     private LinearLayout traceCard() {
@@ -833,54 +885,97 @@ public class RecordsActivity extends BasePageActivity {
         if (logBox == null) return;
         logBox.removeAllViews();
         List<String> logs = LogStore.all(this);
-        logTitle.setText("记录（" + logs.size() + " 条）");
+        logTitle.setText("记录（" + logs.size() + "）");
+
         if (logs.isEmpty()) {
-            TextView empty = Ui.sub(this, t, "还没有记录。接一通电话后这里会出现处理结果。");
-            empty.setPadding(0, Ui.dp(this, 6), 0, 0);
+            TextView empty = Ui.sub(this, t, "还没有记录。接一通电话，这里就会出现号码和归属地。");
+            empty.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 8));
             logBox.addView(empty);
             return;
         }
-        int n = Math.min(logs.size(), 40);
+
+        int n = Math.min(logs.size(), 30);
         for (int i = 0; i < n; i++) {
             final String line = logs.get(i);
+            String[] p = line.split("\\s{2,}");
+            String time = p.length > 0 ? p[0] : "";
+            String area = p.length > 2 ? p[2] : "";
             final String num = numberFrom(line);
             String tag = num.length() >= 3 ? Tags.get(this, num) : null;
-            String text = tag == null ? line : line + "　· " + tag;
 
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(0, Ui.dp(this, 11), 0, Ui.dp(this, 11));
 
-            TextView tv = Ui.text(this, t, text, 12, t.text);
-            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            tv.setLayoutParams(tlp);
-            tv.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
-            row.addView(tv);
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView tvNum = Ui.text(this, t, num.length() == 0 ? line : num, 13.5f, t.text);
+            col.addView(tvNum);
+
+            String hm = time.length() > 6 ? time.substring(6) : time;
+            TextView tvSub = Ui.text(this, t, hm + " · " + area, 11, t.textMuted);
+            tvSub.setPadding(0, Ui.dp(this, 2), 0, 0);
+            col.addView(tvSub);
+            row.addView(col);
+
+            if (tag != null) row.addView(badge(tag));
 
             if (num.length() >= 3) {
-                TextView chip = Ui.pill(this, t, tag == null ? "标记" : "改标记", false);
-                View.OnClickListener open = new View.OnClickListener() {
+                TextView mark = Ui.link(this, t, "标记", new Runnable() {
                     @Override
-                    public void onClick(View v) {
+                    public void run() {
                         askTag(num);
                     }
-                };
-                chip.setOnClickListener(open);
-                tv.setOnClickListener(open);
-                row.addView(chip);
+                });
+                LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                mlp.leftMargin = Ui.dp(this, 10);
+                mark.setLayoutParams(mlp);
+                row.addView(mark);
             }
+
             logBox.addView(row);
-            if (i < n - 1) logBox.addView(Ui.divider(this, t));
+            if (i < n - 1) logBox.addView(thinDivider());
         }
+
         if (logs.size() > n) {
-            TextView more = Ui.sub(this, t, "…还有 " + (logs.size() - n) + " 条");
-            more.setPadding(0, Ui.dp(this, 8), 0, 0);
+            TextView more = Ui.link(this, t, "还有 " + (logs.size() - n) + " 条旧记录", null);
             logBox.addView(more);
         }
-        TextView tip = Ui.sub(this, t, "点右侧「标记」选快递/外卖，下次来电直接显示");
-        tip.setPadding(0, Ui.dp(this, 10), 0, 0);
-        logBox.addView(tip);
+    }
+
+    /** 小标签：绿=记号、红=可疑、灰=正常 */
+    private TextView badge(String text) {
+        boolean warn = Tags.warn(text);
+        boolean plain = "正常".equals(text);
+        int fg = warn ? 0xFFB3322A : plain ? 0xFF6B7684 : 0xFF3B6D11;
+        int bg = warn ? 0x14B3322A : plain ? 0x146B7684 : 0x143B6D11;
+
+        TextView tv = Ui.text(this, t, Tags.SPAM.equals(text) ? "疑似骚扰" : text, 11, fg);
+        tv.setPadding(Ui.dp(this, 8), Ui.dp(this, 3), Ui.dp(this, 8), Ui.dp(this, 3));
+        android.graphics.drawable.GradientDrawable d =
+                new android.graphics.drawable.GradientDrawable();
+        d.setColor(bg);
+        d.setCornerRadius(Ui.dp(this, 7));
+        tv.setBackground(d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = Ui.dp(this, 4);
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private View thinDivider() {
+        View v = new View(this);
+        v.setBackgroundColor(Ui.withAlpha(t.text, t.isDark() ? 0x14 : 0x0D));
+        v.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 0.7f))));
+        return v;
     }
 
     /** 记录行格式：MM-dd HH:mm  号码  归属地  [处理结果]，取出第 2 段 */

@@ -34,6 +34,12 @@ public class MainActivity extends Activity {
     private UiTheme t;
     private TextView statusTitle;
     private TextView statusSub;
+    private View statusDot;
+    private LinearLayout statRow;
+    private TextView compatValue;
+    private TextView overlayValue;
+    private TextView batteryValue;
+    private TextView roleValue;
     private TextView result;
     private EditText input;
 
@@ -56,6 +62,7 @@ public class MainActivity extends Activity {
 
         headerBlock(page.content);
         statusBlock(page.content);
+        settingsBlock(page.content);
         modeBlock(page.content);
         queryBlock(page.content);
         entriesBlock(page.content);
@@ -85,6 +92,11 @@ public class MainActivity extends Activity {
                     }
                 }
             }, 5000);
+        }
+
+        // 覆盖安装或系统回收后服务会停掉，开关却还是"开"。每次进前台补一次。
+        if (Prefs.sp(this).getBoolean("compat_on", false) && !Watcher.isRunning()) {
+            Watcher.start(this);
         }
 
         showPendingCrashIfAny();
@@ -135,94 +147,82 @@ public class MainActivity extends Activity {
     private void statusBlock(LinearLayout parent) {
         LinearLayout card = Ui.card(this, t);
 
-        statusTitle = Ui.title(this, t, "");
-        statusTitle.setTextSize(16);
-        card.addView(statusTitle);
+        LinearLayout line = Ui.statusLine(this, t, "", 0xFF2FA84F);
+        statusDot = line.getChildAt(0);
+        statusTitle = (TextView) line.getChildAt(1);
+        card.addView(line);
 
         statusSub = Ui.sub(this, t, "");
         statusSub.setPadding(0, Ui.dp(this, 5), 0, 0);
         card.addView(statusSub);
 
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
-        buttons.setPadding(0, Ui.dp(this, 12), 0, 0);
+        card.addView(Ui.divider(this, t));
 
-        TextView auth = Ui.pill(this, t, "授予来电识别权限", true);
-        auth.setOnClickListener(new View.OnClickListener() {
+        statRow = Ui.stats(this, t, new String[]{"—", "—", "—"},
+                new String[]{"号段库", "黄页", "号码规则"});
+        card.addView(statRow);
+
+        parent.addView(card);
+    }
+
+    // ---------- 开关与权限 ----------
+
+    private void settingsBlock(LinearLayout parent) {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "开关与权限"));
+
+        LinearLayout compatRow = Ui.item(this, t, "兼容模式", "", new Runnable() {
             @Override
-            public void onClick(View v) {
-                requestRole();
+            public void run() {
+                toggleCompat();
             }
         });
-        buttons.addView(auth);
+        compatValue = (TextView) compatRow.getChildAt(1);
+        card.addView(compatRow);
+        card.addView(Ui.divider(this, t));
 
-        TextView overlay = Ui.pill(this, t, "悬浮窗", false);
-        LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        olp.leftMargin = Ui.dp(this, 8);
-        overlay.setLayoutParams(olp);
-        overlay.setOnClickListener(new View.OnClickListener() {
+        LinearLayout ov = Ui.item(this, t, "悬浮窗权限", "", new Runnable() {
             @Override
-            public void onClick(View v) {
+            public void run() {
                 openOverlaySettings();
             }
         });
-        buttons.addView(overlay);
+        overlayValue = (TextView) ov.getChildAt(1);
+        card.addView(ov);
+        card.addView(Ui.divider(this, t));
 
-        TextView keep = Ui.pill(this, t, "后台保活", false);
-        LinearLayout.LayoutParams klp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        klp.leftMargin = Ui.dp(this, 8);
-        keep.setLayoutParams(klp);
-        keep.setOnClickListener(new View.OnClickListener() {
+        LinearLayout bt = Ui.item(this, t, "后台运行", "", new Runnable() {
             @Override
-            public void onClick(View v) {
+            public void run() {
                 requestBatteryWhitelist();
             }
         });
-        buttons.addView(keep);
+        batteryValue = (TextView) bt.getChildAt(1);
+        card.addView(bt);
+        card.addView(Ui.divider(this, t));
 
-        card.addView(buttons);
-
-        // 第二行：兼容模式（不依赖拦截角色）
-        LinearLayout buttons2 = new LinearLayout(this);
-        buttons2.setOrientation(LinearLayout.HORIZONTAL);
-        buttons2.setPadding(0, Ui.dp(this, 8), 0, 0);
-
-        final boolean compatNow = Prefs.sp(this).getBoolean("compat_on", false);
-        final TextView compat = Ui.pill(this, t,
-                compatNow ? "兼容模式：开" : "兼容模式：关", compatNow);
-        // 覆盖安装或系统回收后服务会停掉，开关却还显示"开"。
-        // 每次进前台补一次启动，避免用户以为开着其实没跑。
-        if (compatNow && !Watcher.isRunning()) {
-            Watcher.start(this);
-        }
-        compat.setOnClickListener(new View.OnClickListener() {
+        LinearLayout rl = Ui.item(this, t, "来电识别权限", "", new Runnable() {
             @Override
-            public void onClick(View v) {
-                boolean on = Prefs.sp(MainActivity.this).getBoolean("compat_on", false);
-                if (on) {
-                    Watcher.stop(MainActivity.this);
-                    compat.setText("兼容模式：关");
-                    toast("兼容模式已关闭");
-                } else {
-                    Watcher.start(MainActivity.this);
-                    compat.setText("兼容模式：开");
-                    toast("已开启：状态栏会有一条常驻通知，来电时提示归属地");
-                }
+            public void run() {
+                requestRole();
             }
         });
-        buttons2.addView(compat);
+        roleValue = (TextView) rl.getChildAt(1);
+        card.addView(rl);
 
-        TextView compatHint = Ui.sub(this, t, "拦截服务被系统挡住时用这个");
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hl.leftMargin = Ui.dp(this, 10);
-        compatHint.setLayoutParams(hl);
-        buttons2.addView(compatHint);
-
-        card.addView(buttons2);
         parent.addView(card);
+    }
+
+    private void toggleCompat() {
+        boolean on = Prefs.sp(this).getBoolean("compat_on", false);
+        if (on) {
+            Watcher.stop(this);
+            toast("兼容模式已关闭，来电不再提示");
+        } else {
+            Watcher.start(this);
+            toast("已开启：状态栏会有一条常驻通知，来电时提示归属地");
+        }
+        refreshStatus();
     }
 
     // ---------- 三档 ----------
@@ -331,8 +331,7 @@ public class MainActivity extends Activity {
     private void entriesBlock(LinearLayout parent) {
         LinearLayout card = Ui.card(this, t);
 
-        card.addView(Ui.row(this, t, "我的号码库",
-                Blacklist.count(this) + " 条规则 · 完整号码或 95* 前缀",
+        card.addView(Ui.item(this, t, "我的号码库", Blacklist.count(this) + " 条",
                 new Runnable() {
                     @Override
                     public void run() {
@@ -341,28 +340,23 @@ public class MainActivity extends Activity {
                 }));
         card.addView(Ui.divider(this, t));
 
-        card.addView(Ui.row(this, t, "数据源与更新",
-                "号段库 / 号码库 / 在线查询",
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        startActivity(new Intent(MainActivity.this, SourcesActivity.class));
-                    }
-                }));
+        card.addView(Ui.item(this, t, "数据源与更新", "更新 ›", new Runnable() {
+            @Override
+            public void run() {
+                startActivity(new Intent(MainActivity.this, SourcesActivity.class));
+            }
+        }));
         card.addView(Ui.divider(this, t));
 
-        card.addView(Ui.row(this, t, "外观主题",
-                t.name + " · 液态玻璃，共 3 套",
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        startActivity(new Intent(MainActivity.this, AppearanceActivity.class));
-                    }
-                }));
+        card.addView(Ui.item(this, t, "外观主题", t.name, new Runnable() {
+            @Override
+            public void run() {
+                startActivity(new Intent(MainActivity.this, AppearanceActivity.class));
+            }
+        }));
         card.addView(Ui.divider(this, t));
 
-        card.addView(Ui.row(this, t, "拦截记录与诊断",
-                "最近的来电、上次崩溃",
+        card.addView(Ui.item(this, t, "记录与诊断", LogStore.all(this).size() + " 条",
                 new Runnable() {
                     @Override
                     public void run() {
@@ -385,17 +379,60 @@ public class MainActivity extends Activity {
 
     protected void refreshStatus() {
         if (statusTitle == null) return;
-        boolean held = roleHeld();
-        statusTitle.setText(held ? "✅ 来电识别已开启" : "⚠️ 来电识别未开启");
-        statusTitle.setTextColor(held ? t.text : t.danger);
+        boolean compatOn = Prefs.sp(this).getBoolean("compat_on", false);
+        boolean running = Watcher.isRunning();
+        boolean ok = compatOn && running;
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("号段库 ").append(PhoneLookup.get(this).size()).append(" 条");
-        sb.append(" · 黄页 ").append(Yellow.size(this)).append(" 条");
-        if (!Overlay.canDraw(this)) sb.append("\n悬浮窗未授权，来电提示只能走通知栏");
-        if (!batteryFree(this)) sb.append("\n电池策略可能杀掉后台，点「后台保活」放行");
-        if (!held) sb.append("\n不授权的话，来电根本不会经过本 App");
-        statusSub.setText(sb.toString());
+        statusTitle.setText(ok ? "兼容模式运行中"
+                : compatOn ? "兼容模式未运行" : "兼容模式未开启");
+        statusTitle.setTextColor(ok ? t.text : t.danger);
+        paintDot(statusDot, ok ? 0xFF2FA84F : 0xFFD9483B);
+
+        long wLast = Prefs.sp(this).getLong("w_last", 0L);
+        int wCount = Prefs.sp(this).getInt("w_count", 0);
+        statusSub.setText(ok
+                ? "已处理 " + wCount + " 通 · 最近 " + (wLast == 0 ? "还没有" : clock(wLast))
+                : "打开兼容模式后，来电时会显示归属地并记录下来");
+
+        try {
+            setStat(0, String.format(java.util.Locale.CHINA, "%,d", PhoneLookup.get(this).size()));
+            setStat(1, String.valueOf(Yellow.size(this)));
+            setStat(2, String.valueOf(Blacklist.count(this)));
+        } catch (Throwable ignored) {
+        }
+
+        if (compatValue != null) {
+            compatValue.setText(compatOn ? (running ? "开 · 运行中" : "开 · 未运行") : "关");
+        }
+        if (overlayValue != null) overlayValue.setText(Overlay.canDraw(this) ? "已授予" : "未授予");
+        if (batteryValue != null) batteryValue.setText(batteryFree(this) ? "不受限" : "受限，点此调整");
+        if (roleValue != null) roleValue.setText(roleHeld() ? "已授予" : "未授予");
+    }
+
+    private void setStat(int i, String v) {
+        if (statRow == null || i >= statRow.getChildCount()) return;
+        View col = statRow.getChildAt(i);
+        if (!(col instanceof LinearLayout)) return;
+        View first = ((LinearLayout) col).getChildAt(0);
+        if (first instanceof TextView) ((TextView) first).setText(v);
+    }
+
+    private void paintDot(View v, int color) {
+        if (v == null) return;
+        android.graphics.drawable.GradientDrawable d =
+                new android.graphics.drawable.GradientDrawable();
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setColor(color);
+        v.setBackground(d);
+    }
+
+    private static String clock(long ts) {
+        try {
+            return new java.text.SimpleDateFormat("HH:mm", java.util.Locale.CHINA)
+                    .format(new java.util.Date(ts));
+        } catch (Throwable e) {
+            return "";
+        }
     }
 
     private void doQuery() {

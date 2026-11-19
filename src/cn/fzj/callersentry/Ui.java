@@ -245,6 +245,96 @@ public final class Ui {
         return row;
     }
 
+    /** 状态圆点 */
+    public static View dot(Context c, int color) {
+        View v = new View(c);
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setShape(GradientDrawable.OVAL);
+        v.setBackground(d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(c, 7), dp(c, 7));
+        lp.rightMargin = dp(c, 8);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    /** 一行状态：圆点 + 文字，返回整行，第 1 个子 View 是文字 */
+    public static LinearLayout statusLine(Context c, UiTheme t, String label, int dotColor) {
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(dot(c, dotColor));
+        TextView tv = text(c, t, label, 14, t.text);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(tv);
+        return row;
+    }
+
+    /** 等宽多列数字：值在上、标签在下 */
+    public static LinearLayout stats(Context c, UiTheme t, String[] values, String[] labels) {
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(c, 8), 0, 0);
+        for (int i = 0; i < values.length; i++) {
+            LinearLayout col = new LinearLayout(c);
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView v = text(c, t, values[i], 17, t.text);
+            v.setTypeface(Typeface.DEFAULT_BOLD);
+            col.addView(v);
+            TextView l = text(c, t, labels[i], 11, t.textMuted);
+            l.setPadding(0, dp(c, 3), 0, 0);
+            col.addView(l);
+            row.addView(col);
+        }
+        return row;
+    }
+
+    /** 设置行：左标题 + 右灰色值；返回整行，第 1 个子 View 是值 */
+    public static LinearLayout item(Context c, UiTheme t, String title, String value,
+                                    final Runnable onClick) {
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(c, 2), dp(c, 13), dp(c, 2), dp(c, 13));
+
+        TextView tv = text(c, t, title, 13.5f, t.text);
+        tv.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(tv);
+
+        TextView val = text(c, t, value, 12, t.textMuted);
+        row.addView(val);
+
+        if (onClick != null) {
+            row.setClickable(true);
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    onClick.run();
+                }
+            });
+        }
+        return row;
+    }
+
+    /** 行内文字按钮（无底色），用于次要操作 */
+    public static TextView link(Context c, UiTheme t, String label, final Runnable onClick) {
+        TextView tv = text(c, t, label, 13, t.accent);
+        tv.setPadding(0, dp(c, 6), dp(c, 2), dp(c, 6));
+        tv.setClickable(true);
+        if (onClick != null) {
+            tv.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    onClick.run();
+                }
+            });
+        }
+        return tv;
+    }
+
     /** 页面骨架：玻璃背景 + 可滚动内容 */
     public static final class Page {
         public final ScrollView scroll;
