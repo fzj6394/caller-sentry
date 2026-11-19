@@ -186,7 +186,7 @@ public class ScreeningService extends CallScreeningService {
                     String area = describe(null, digits, lib);
                     if (area == null || area.length() == 0) return;
                     String[] lines = lines(digits, area, mark);
-                    Overlay.update(lines[0], lines[1]);
+                    Overlay.update(lines[0], lines[1], lines[2]);
                     LogStore.add(ScreeningService.this, digits, area, "归属地补齐");
                 } catch (Throwable ignored) {
                 }
@@ -213,21 +213,20 @@ public class ScreeningService extends CallScreeningService {
         }, "online-lookup").start();
     }
 
-    /** 悬浮条两行文字：短号不显示没意义的"归属地" */
+    /** 返回 {顶部小字, 主行, 号码行}；小字可能为 null（没有标签时不占一行） */
     private static String[] lines(String digits, String area, String mark) {
+        String num = NumUtil.pretty(digits);
+        String over = null;
         String line1;
-        String line2 = digits;
-        if (mark != null) {
-            line1 = mark;
-            if (area != null && area.length() > 0 && digits.length() >= 7) {
-                line2 = area + "　" + digits;
-            }
-        } else if (area != null && area.length() > 0) {
+        if (area != null && area.length() > 0) {
+            over = mark;
             line1 = area;
+        } else if (mark != null) {
+            line1 = mark;
         } else {
             line1 = "来电";
         }
-        return new String[]{line1, line2};
+        return new String[]{over, line1, num};
     }
 
     private void show(String digits, String area, String mark, boolean warn) {
@@ -238,12 +237,12 @@ public class ScreeningService extends CallScreeningService {
         boolean ntOk = Notify.allowed(this);
         Trace.add(this, "show", "overlayOn=" + ovOn + " 权限=" + ovOk
                 + " notifyOn=" + ntOn + " 通知允许=" + ntOk
-                + " 内容=" + l[0] + " / " + l[1]);
+                + " 内容=" + l[0] + " / " + l[1] + " / " + l[2]);
         if (ovOn && ovOk) {
-            Overlay.show(this, l[0], l[1], warn);
+            Overlay.show(this, l[0], l[1], l[2], warn, 7000);
         }
         if (ntOn) {
-            Notify.show(this, l[0], l[1]);
+            Notify.show(this, l[1], l[2], warn);
         }
     }
 

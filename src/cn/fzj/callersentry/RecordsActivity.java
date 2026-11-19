@@ -183,7 +183,7 @@ public class RecordsActivity extends BasePageActivity {
                     toast("通知没开：设置 → 应用 → 来电哨兵 → 通知");
                     return;
                 }
-                Notify.show(RecordsActivity.this, "绍兴 · 电信", "0575 8888 8888");
+                Notify.show(RecordsActivity.this, "绍兴 · 电信", "0575 8888 8888", false);
                 toast("下拉通知栏看看");
             }
         });
@@ -198,7 +198,7 @@ public class RecordsActivity extends BasePageActivity {
         lock.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                CallCardActivity.show(RecordsActivity.this,
+                CallCardActivity.show(RecordsActivity.this, "来电",
                         "哈尔滨 · 移动", "158 4661 0296", false);
                 toast("锁屏后再来一次，就能看到它在锁屏上的样子");
             }
@@ -214,7 +214,7 @@ public class RecordsActivity extends BasePageActivity {
             toast("先在首页点「悬浮窗」把权限给了");
             return;
         }
-        Overlay.show(this, line1, line2, warn);
+        Overlay.show(this, "来电", line1, line2, warn, 7000);
         toast("看屏幕上方，7 秒后自动消失");
     }
 

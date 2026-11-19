@@ -18,19 +18,22 @@ import android.widget.TextView;
 /**
  * 来电时压一条提示。
  *
- * 样式：液态玻璃——半透明白、细描边、柔和渐变，和系统来电卡片同色系。
- * 命中号码库时不再整块铺红，只把描边和文字染成暖红，警示但不刺眼。
+ * 设计（v2.7.3 起）：
+ * - 无描边，只有一层低透明度的深色底，靠留白和字重分级说话；
+ * - 三级文字：小字距标签（来电 / 快递 / 疑似骚扰）→ 主行（归属地）→ 带字距的号码；
+ * - 全部左对齐，两侧各留 18dp，不再把三行居中堆成一张小标签；
+ * - 命中号码库不铺红，只染标签和主行，底仍是深灰玻璃。
  *
- * 显示时长：
- * - 兼容模式传 holdMs = 0，表示"不自动消失"，接听/挂断时调用方 hide()；
- * - 其它入口（预览、拦截服务）传 7000，7 秒后自己收。
+ * 这里必须有一层底色：悬浮条画在别人的界面（来电全屏页）之上，
+ * 白字直接压在亮色背景上会糊。锁屏卡片有整屏压暗，那边可以不要底色。
  *
- * 注意：addView 必须在有 Looper 的线程上跑，而 onScreenCall 是 binder 线程，
- * 所以这里统一 post 到主线程。
+ * addView 必须在有 Looper 的线程上跑，而 onScreenCall 是 binder 线程，
+ * 所以统一 post 到主线程。
  */
 public final class Overlay {
 
     private static View current;
+    private static TextView overView;
     private static TextView titleView;
     private static TextView subView;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -49,12 +52,19 @@ public final class Overlay {
     }
 
     public static void show(Context ctx, String line1, String line2, boolean warn) {
-        show(ctx, line1, line2, warn, 7000);
+        show(ctx, null, line1, line2, warn, 7000);
     }
 
-    /** @param holdMs 0 表示不自动消失，由调用方在通话状态变化时收起 */
-    public static void show(final Context ctx, final String line1, final String line2,
-                            final boolean warn, final int holdMs) {
+    public static void show(Context ctx, String line1, String line2, boolean warn, int holdMs) {
+        show(ctx, null, line1, line2, warn, holdMs);
+    }
+
+    /**
+     * @param overline 最上面那行小字（来电 / 快递 / 疑似骚扰），null 表示不显示
+     * @param holdMs   0 表示不自动消失，由调用方在通话状态变化时收起
+     */
+    public static void show(final Context ctx, final String overline, final String line1,
+                            final String line2, final boolean warn, final int holdMs) {
         if (!canDraw(ctx)) {
             Trace.add(ctx, "overlay", "没有悬浮窗权限，跳过");
             return;
@@ -63,12 +73,13 @@ public final class Overlay {
         MAIN.post(new Runnable() {
             @Override
             public void run() {
-                addOverlay(c, line1, line2, warn, holdMs);
+                addOverlay(c, overline, line1, line2, warn, holdMs);
             }
         });
     }
 
-    private static void addOverlay(Context c, String line1, String line2, boolean warn, int holdMs) {
+    private static void addOverlay(Context c, String overline, String line1, String line2,
+                                   boolean warn, int holdMs) {
         WindowManager wm = (WindowManager) c.getSystemService(Context.WINDOW_SERVICE);
         if (wm == null) {
             Trace.add(c, "overlay", "拿不到 WindowManager");
@@ -80,40 +91,46 @@ public final class Overlay {
 
         LinearLayout box = new LinearLayout(c);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(c, 20), dp(c, 14), dp(c, 20), dp(c, 14));
+        box.setPadding(dp(c, 18), dp(c, 13), dp(c, 18), dp(c, 14));
 
-        // 液态玻璃：上偏白、下略带冷灰，半透明透出底下的来电卡片
-        GradientDrawable bg = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                warn ? new int[]{0xF7FFF5F3, 0xEFF7E4E0}
-                        : new int[]{0xF7FFFFFF, 0xEFF0F4FA});
+        // 无描边的一层深色玻璃：透出底下的来电界面，又不至于把字糊掉
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(warn ? 0x8F1C100E : 0x8F0B1220);
         bg.setCornerRadius(dp(c, 20));
-        bg.setStroke(dp(c, 1), warn ? 0x59D9483B : 0x2E0B1220);
         box.setBackground(bg);
         box.setElevation(dp(c, 10));
 
-        TextView t1 = new TextView(c);
-        t1.setText(line1);
-        t1.setTextColor(warn ? 0xFFB3322A : 0xFF111B2B);
-        t1.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-        t1.setTypeface(Typeface.DEFAULT_BOLD);
-        t1.setGravity(Gravity.CENTER);
-        t1.setMaxLines(1);
-        t1.setEllipsize(TextUtils.TruncateAt.END);
-        box.addView(t1);
+        if (overline != null && overline.length() > 0) {
+            overView = label(c, overline, warn ? 0xCCFFB4A6 : 0xA6FFFFFF, dp(c, 5));
+            box.addView(overView);
+        } else {
+            overView = null;
+        }
 
-        TextView t2 = new TextView(c);
-        t2.setText(line2);
-        t2.setTextColor(warn ? 0xB3A03A30 : 0x991B2B3A);
-        t2.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
-        t2.setGravity(Gravity.CENTER);
-        t2.setMaxLines(1);
-        t2.setEllipsize(TextUtils.TruncateAt.END);
-        t2.setPadding(0, dp(c, 5), 0, 0);
-        box.addView(t2);
+        titleView = new TextView(c);
+        titleView.setText(line1);
+        titleView.setTextColor(warn ? 0xFFFFB4A6 : 0xFFFFFFFF);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
+        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        titleView.setGravity(Gravity.START);
+        titleView.setMaxLines(1);
+        titleView.setEllipsize(TextUtils.TruncateAt.END);
+        titleView.setShadowLayer(dp(c, 6), 0, dp(c, 1), 0x59000000);
+        box.addView(titleView);
+
+        subView = new TextView(c);
+        subView.setText(line2);
+        subView.setTextColor(0xB8FFFFFF);
+        subView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        subView.setGravity(Gravity.START);
+        subView.setLetterSpacing(0.10f);
+        subView.setMaxLines(1);
+        subView.setEllipsize(TextUtils.TruncateAt.END);
+        subView.setPadding(0, dp(c, 4), 0, 0);
+        box.addView(subView);
 
         int screenW = c.getResources().getDisplayMetrics().widthPixels;
-        int width = Math.min(screenW - dp(c, 72), dp(c, 320));
+        int width = Math.min(screenW - dp(c, 64), dp(c, 330));
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 width,
@@ -130,12 +147,14 @@ public final class Overlay {
         try {
             wm.addView(box, lp);
             current = box;
-            titleView = t1;
-            subView = t2;
             Trace.add(c, "overlay", "addView 成功：" + line1);
         } catch (Throwable e) {
             Trace.add(c, "overlay", "addView 失败 " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());
+            current = null;
+            overView = null;
+            titleView = null;
+            subView = null;
             return;
         }
 
@@ -148,6 +167,20 @@ public final class Overlay {
             }
         };
         MAIN.postDelayed(pendingHide, delay);
+    }
+
+    /** 顶部小字：字距拉开、字号压小，只做分类提示，不抢主行 */
+    private static TextView label(Context c, String text, int color, int padBottom) {
+        TextView tv = new TextView(c);
+        tv.setText(text);
+        tv.setTextColor(color);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        tv.setLetterSpacing(0.26f);
+        tv.setGravity(Gravity.START);
+        tv.setMaxLines(1);
+        tv.setEllipsize(TextUtils.TruncateAt.END);
+        tv.setPadding(0, 0, 0, padBottom);
+        return tv;
     }
 
     private static void cancelPendingHide() {
@@ -176,16 +209,24 @@ public final class Overlay {
         } catch (Throwable ignored) {
         }
         current = null;
+        overView = null;
         titleView = null;
         subView = null;
     }
 
     /** 归属地算出来得晚一点时（冷启动），先把号码显示出来，回头把文字补上。 */
     public static void update(final String line1, final String line2) {
+        update(null, line1, line2);
+    }
+
+    public static void update(final String overline, final String line1, final String line2) {
         MAIN.post(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (overView != null && overline != null && overline.length() > 0) {
+                        overView.setText(overline);
+                    }
                     if (titleView != null && line1 != null) titleView.setText(line1);
                     if (subView != null && line2 != null) subView.setText(line2);
                 } catch (Throwable ignored) {

@@ -115,6 +115,47 @@ public final class NumUtil {
         return d;
     }
 
+    /**
+     * 给眼睛看的号码：3-4-4 / 4-4-4 分组。
+     * 屏幕上连续 11 位数字很难一眼读出来，分组后好认得多。
+     */
+    public static String pretty(String digits) {
+        if (digits == null || digits.length() == 0) return "";
+        int n = digits.length();
+        if (n == 11 && digits.charAt(0) == '1') {
+            return digits.substring(0, 3) + " " + digits.substring(3, 7) + " " + digits.substring(7);
+        }
+        if (n == 10 && (digits.startsWith("400") || digits.startsWith("800"))
+                && isAllDigits(digits)) {
+            return digits.substring(0, 3) + " " + digits.substring(3, 6) + " " + digits.substring(6);
+        }
+        if (n == 12 && digits.charAt(0) == '0') {
+            int ac = (digits.startsWith("01") || digits.startsWith("02")) ? 3 : 4;
+            String rest = digits.substring(ac);
+            StringBuilder sb = new StringBuilder(digits.substring(0, ac));
+            for (int i = 0; i < rest.length(); i++) {
+                if (i > 0 && i % 4 == 0) sb.append(' ');
+                sb.append(rest.charAt(i));
+            }
+            return sb.toString();
+        }
+        if (n <= 6) return digits;
+        StringBuilder sb = new StringBuilder(n + 4);
+        for (int i = 0; i < n; i++) {
+            if (i > 0 && i % 4 == 0) sb.append(' ');
+            sb.append(digits.charAt(i));
+        }
+        return sb.toString();
+    }
+
+    private static boolean isAllDigits(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') return false;
+        }
+        return true;
+    }
+
     /** 带 + 或 00 开头，且不是中国大陆号 */
     public static boolean looksInternational(String raw) {
         if (raw == null) return false;

@@ -19,30 +19,30 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * 锁屏来电卡片。
+ * 锁屏来电提示。
  *
  * 为什么需要它：TYPE_APPLICATION_OVERLAY 的窗口在锁屏界面上会被系统整体隐藏，
- * addView 依然返回成功，但用户什么都看不到（我们日志里 [overlay] 成功、锁屏却没东西，
- * 就是这个原因）。锁屏上唯一能显示内容的通道是 Activity——带 setShowWhenLocked(true)
- * 的透明页面可以画在锁屏之上。
+ * addView 依然返回成功，但用户什么都看不到。锁屏上唯一能显示内容的通道是 Activity——
+ * 带 setShowWhenLocked(true) 的透明页面可以画在锁屏之上。
  *
- * 于是：解锁状态走悬浮条（不改动用户正在看的界面），锁屏状态走这个 Activity。
- * 两者内容、样式一致，用户感知不到区别。
+ * 设计（v2.7.3 起）：不画卡片、不画描边。锁屏本身已经有整屏压暗，
+ * 再叠一个白块反而笨重；这里只用三级文字直接浮在壁纸上，
+ * 靠 22sp 主行 + 拉开字距的小标签 + 阴影来立住。
  *
- * 收起的时机与悬浮条相同：接听（OFFHOOK）或挂断（IDLE），另外留 120 秒兜底。
+ * 收起：接听（OFFHOOK）、挂断（IDLE）、轻点、或 120 秒兜底。
  */
 public class CallCardActivity extends Activity {
 
     private static volatile CallCardActivity alive;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
+    private TextView overView;
     private TextView titleView;
     private TextView subView;
     private BroadcastReceiver rx;
@@ -53,10 +53,18 @@ public class CallCardActivity extends Activity {
         }
     };
 
-    /** 从服务里调：启动（或复用）锁屏卡片 */
+    /** 从服务里调：启动（或复用）锁屏提示 */
     public static void show(Context c, String line1, String line2, boolean warn) {
+        show(c, null, line1, line2, warn);
+    }
+
+    /**
+     * @param overline 上面那行小字（来电 / 快递 / 疑似骚扰），null 表示不显示
+     */
+    public static void show(Context c, String overline, String line1, String line2, boolean warn) {
         try {
             Intent i = new Intent(c, CallCardActivity.class)
+                    .putExtra("over", overline)
                     .putExtra("l1", line1)
                     .putExtra("l2", line2)
                     .putExtra("warn", warn)
@@ -64,20 +72,23 @@ public class CallCardActivity extends Activity {
                             | Intent.FLAG_ACTIVITY_NO_ANIMATION
                             | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
             c.startActivity(i);
-            Trace.add(c, "card", "已启动锁屏卡片：" + line1);
+            Trace.add(c, "card", "已启动锁屏提示：" + line1);
         } catch (Throwable e) {
             Trace.add(c, "card", "启动失败 " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
     /** 归属地算得晚时补文字 */
-    public static void update(final String line1, final String line2) {
+    public static void update(final String overline, final String line1, final String line2) {
         MAIN.post(new Runnable() {
             @Override
             public void run() {
                 CallCardActivity a = alive;
                 if (a == null) return;
                 try {
+                    if (a.overView != null && overline != null && overline.length() > 0) {
+                        a.overView.setText(overline);
+                    }
                     if (a.titleView != null && line1 != null) a.titleView.setText(line1);
                     if (a.subView != null && line2 != null) a.subView.setText(line2);
                 } catch (Throwable ignored) {
@@ -101,7 +112,6 @@ public class CallCardActivity extends Activity {
         super.onCreate(saved);
         alive = this;
 
-        // 关键：允许画在锁屏之上；来电时屏幕本来就是亮的，不强制点亮
         try {
             if (Build.VERSION.SDK_INT >= 27) {
                 setShowWhenLocked(true);
@@ -111,12 +121,11 @@ public class CallCardActivity extends Activity {
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         } catch (Throwable ignored) {
         }
 
         setContentView(buildRoot(getIntent()));
-        Trace.add(this, "card", "卡片已显示");
+        Trace.add(this, "card", "锁屏提示已显示");
     }
 
     @Override
@@ -124,10 +133,14 @@ public class CallCardActivity extends Activity {
         super.onNewIntent(intent);
         if (intent == null) return;
         try {
-            if (titleView != null) titleView.setText(intent.getStringExtra("l1"));
+            String over = intent.getStringExtra("over");
+            if (overView != null && over != null && over.length() > 0) overView.setText(over);
+            if (titleView != null) {
+                titleView.setText(intent.getStringExtra("l1"));
+                titleView.setTextColor(intent.getBooleanExtra("warn", false)
+                        ? 0xFFFFB4A6 : 0xFFFFFFFF);
+            }
             if (subView != null) subView.setText(intent.getStringExtra("l2"));
-            boolean warn = intent.getBooleanExtra("warn", false);
-            if (titleView != null) titleView.setTextColor(warn ? 0xFFB3322A : 0xFF111B2B);
             MAIN.removeCallbacks(autoClose);
             MAIN.postDelayed(autoClose, 120_000L);
         } catch (Throwable ignored) {
@@ -135,14 +148,19 @@ public class CallCardActivity extends Activity {
     }
 
     private View buildRoot(Intent in) {
+        String over = in == null ? null : in.getStringExtra("over");
         String l1 = in == null ? "来电" : in.getStringExtra("l1");
         String l2 = in == null ? "" : in.getStringExtra("l2");
         boolean warn = in != null && in.getBooleanExtra("warn", false);
         if (l1 == null) l1 = "来电";
+        if (l2 == null) l2 = "";
 
         FrameLayout root = new FrameLayout(this);
-        // 轻微压暗：白色玻璃在亮色锁屏 / 来电界面上才立得住，但不足以遮住系统界面
-        root.setBackgroundColor(0x40000000);
+        // 顶部略压暗、往下渐隐：白字在任何壁纸上都有底，又不至于把锁屏压黑
+        GradientDrawable scrim = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x8C000000, 0x4D000000, 0x00000000});
+        root.setBackground(scrim);
         root.setClickable(true);
         root.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -151,65 +169,67 @@ public class CallCardActivity extends Activity {
             }
         });
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(22), dp(16), dp(22), dp(14));
-
-        GradientDrawable bg = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                warn ? new int[]{0xFAFFF5F3, 0xF3F7E4E0}
-                        : new int[]{0xFAFFFFFF, 0xF3F0F4FA});
-        bg.setCornerRadius(dp(20));
-        bg.setStroke(dp(1), warn ? 0x59D9483B : 0x2E0B1220);
-        card.setBackground(bg);
-        card.setElevation(dp(12));
-        card.setClickable(true);
-        card.setOnClickListener(new View.OnClickListener() {
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setGravity(Gravity.START);
+        block.setClickable(true);
+        block.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 finishQuietly();
             }
         });
 
+        if (over != null && over.length() > 0) {
+            overView = new TextView(this);
+            overView.setText(over);
+            overView.setTextColor(warn ? 0xCCFFB4A6 : 0x99FFFFFF);
+            overView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+            overView.setLetterSpacing(0.30f);
+            overView.setGravity(Gravity.START);
+            overView.setMaxLines(1);
+            overView.setEllipsize(TextUtils.TruncateAt.END);
+            overView.setShadowLayer(dp(8), 0, dp(1), 0x80000000);
+            block.addView(overView);
+        }
+
         titleView = new TextView(this);
         titleView.setText(l1);
-        titleView.setTextColor(warn ? 0xFFB3322A : 0xFF111B2B);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        titleView.setGravity(Gravity.CENTER);
+        titleView.setTextColor(warn ? 0xFFFFB4A6 : 0xFFFFFFFF);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        titleView.setGravity(Gravity.START);
         titleView.setMaxLines(1);
         titleView.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(titleView);
+        titleView.setShadowLayer(dp(10), 0, dp(1), 0x8C000000);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.topMargin = dp(5);
+        titleView.setLayoutParams(tlp);
+        block.addView(titleView);
 
         subView = new TextView(this);
         subView.setText(l2);
-        subView.setTextColor(warn ? 0xB3A03A30 : 0x991B2B3A);
+        subView.setTextColor(0xB3FFFFFF);
         subView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        subView.setGravity(Gravity.CENTER);
+        subView.setGravity(Gravity.START);
+        subView.setLetterSpacing(0.12f);
         subView.setMaxLines(1);
         subView.setEllipsize(TextUtils.TruncateAt.END);
+        subView.setShadowLayer(dp(8), 0, dp(1), 0x80000000);
         subView.setPadding(0, dp(6), 0, 0);
-        card.addView(subView);
-
-        TextView hint = new TextView(this);
-        hint.setText("轻点收起");
-        hint.setTextColor(0x661B2B3A);
-        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
-        hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, dp(9), 0, 0);
-        card.addView(hint);
+        block.addView(subView);
 
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
-        int width = Math.min(screenW - dp(56), dp(340));
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                Math.min(screenW - dp(52), dp(400)), ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         lp.topMargin = (int) (screenH * 0.26f);
-        card.setLayoutParams(lp);
+        block.setLayoutParams(lp);
 
-        root.addView(card);
+        root.addView(block);
         return root;
     }
 
