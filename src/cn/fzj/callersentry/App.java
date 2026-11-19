@@ -18,7 +18,7 @@ import java.util.Locale;
  */
 public class App extends Application {
 
-    static final String VERSION = "2.5.8";
+    static final String VERSION = "2.5.9";
     static final String CRASH_FILE = "crash.txt";
 
     @Override
@@ -30,6 +30,9 @@ public class App extends Application {
             public void uncaughtException(Thread t, Throwable e) {
                 try {
                     save(getApplicationContext(), e, "未捕获异常 @ " + t.getName());
+                    Trace.add(getApplicationContext(), "crash",
+                            e.getClass().getSimpleName() + ": " + e.getMessage()
+                                    + " @ " + t.getName());
                 } catch (Throwable ignored) {
                 }
                 if (prev != null) {
@@ -37,6 +40,9 @@ public class App extends Application {
                 }
             }
         });
+
+        Trace.add(this, "app", "进程启动 v" + VERSION + " / " + Build.MODEL
+                + " / api " + Build.VERSION.SDK_INT);
 
         // 预热：设置快照、通知通道、号段库（4.3MB 解压）、黄页、在线缓存。
         // 全放后台，来电时才不会现加载。

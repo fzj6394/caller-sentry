@@ -43,7 +43,10 @@ public final class Notify {
     public static void show(Context c, String title, String text) {
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm == null) return;
+            if (nm == null) {
+                Trace.add(c, "notify", "拿不到 NotificationManager");
+                return;
+            }
             ensureChannel(c);
 
             Intent open = new Intent(c, MainActivity.class);
@@ -59,7 +62,10 @@ public final class Notify {
                     .setContentIntent(pi)
                     .build();
             nm.notify(1001, n);
-        } catch (Throwable ignored) {
+            Trace.add(c, "notify", "已发出：" + title + " / " + text);
+        } catch (Throwable e) {
+            Trace.add(c, "notify", "发送失败 " + e.getClass().getSimpleName()
+                    + ": " + e.getMessage());
         }
     }
 }

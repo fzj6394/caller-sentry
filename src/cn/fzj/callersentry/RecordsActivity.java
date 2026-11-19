@@ -57,6 +57,7 @@ public class RecordsActivity extends BasePageActivity {
         content.addView(previewCard());
         content.addView(crashCard());
         content.addView(timingCard());
+        content.addView(traceCard());
         content.addView(directoryCard());
     }
 
@@ -704,6 +705,92 @@ public class RecordsActivity extends BasePageActivity {
         return head.length() > 40 ? head.substring(0, 40) + "…" : head;
     }
 
+    private TextView traceInfo;
+
+    /** 运行日志：来电链路上每一步的真实结果，出问题时直接发这段 */
+    private LinearLayout traceCard() {
+        LinearLayout card = Ui.card(this, t);
+        card.addView(Ui.title(this, t, "运行日志"));
+
+        TextView hint = Ui.sub(this, t,
+                "记录了进入服务、判定、respond、悬浮窗 addView 结果、通知是否发出，"
+                        + "以及被吞掉的异常原文。接完电话点「分享日志」发我即可。");
+        hint.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 8));
+        card.addView(hint);
+
+        traceInfo = Ui.text(this, t, "", 11, t.text);
+        traceInfo.setLineSpacing(Ui.dp(this, 3), 1f);
+        card.addView(traceInfo);
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = Ui.dp(this, 12);
+        btns.setLayoutParams(blp);
+
+        TextView share = Ui.pill(this, t, "分享日志", true);
+        share.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("text/plain");
+                i.putExtra(Intent.EXTRA_TEXT, Trace.dump(RecordsActivity.this));
+                try {
+                    startActivity(Intent.createChooser(i, "发送到…"));
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+        btns.addView(share);
+
+        TextView refresh = Ui.pill(this, t, "刷新", false);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rlp.leftMargin = Ui.dp(this, 8);
+        refresh.setLayoutParams(rlp);
+        refresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                renderTrace();
+                toast("已刷新");
+            }
+        });
+        btns.addView(refresh);
+
+        TextView clear = Ui.pill(this, t, "清空", false);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        clp.leftMargin = Ui.dp(this, 8);
+        clear.setLayoutParams(clp);
+        clear.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Trace.clear(RecordsActivity.this);
+                renderTrace();
+            }
+        });
+        btns.addView(clear);
+        card.addView(btns);
+        return card;
+    }
+
+    private void renderTrace() {
+        if (traceInfo == null) return;
+        java.util.List<String> rows = Trace.all(this);
+        if (rows.isEmpty()) {
+            traceInfo.setText("还没有日志。接一通电话后再看。");
+            return;
+        }
+        int n = Math.min(rows.size(), 40);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            if (i > 0) sb.append('\n');
+            sb.append(rows.get(i));
+        }
+        traceInfo.setText(sb.toString());
+    }
+
     private void renderLogs() {
         if (logBox == null) return;
         logBox.removeAllViews();
@@ -734,6 +821,7 @@ public class RecordsActivity extends BasePageActivity {
         renderLogs();
         refreshServiceInfo();
         renderWatch();
+        renderTrace();
         if (overlayStatus != null) {
             boolean ov = Overlay.canDraw(this);
             boolean nt = Notify.allowed(this);

@@ -40,7 +40,10 @@ public final class Overlay {
 
     public static void show(final Context ctx, final String line1, final String line2,
                             final boolean warn) {
-        if (!canDraw(ctx)) return;
+        if (!canDraw(ctx)) {
+            Trace.add(ctx, "overlay", "没有悬浮窗权限，跳过");
+            return;
+        }
         final Context c = ctx.getApplicationContext();
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
@@ -52,7 +55,10 @@ public final class Overlay {
 
     private static void addOverlay(Context c, String line1, String line2, boolean warn) {
         WindowManager wm = (WindowManager) c.getSystemService(Context.WINDOW_SERVICE);
-        if (wm == null) return;
+        if (wm == null) {
+            Trace.add(c, "overlay", "拿不到 WindowManager");
+            return;
+        }
 
         hideNow();
 
@@ -97,7 +103,10 @@ public final class Overlay {
             wm.addView(box, lp);
             current = box;
             titleView = t1;
-        } catch (Throwable ignored) {
+            Trace.add(c, "overlay", "addView 成功：" + line1);
+        } catch (Throwable e) {
+            Trace.add(c, "overlay", "addView 失败 " + e.getClass().getSimpleName()
+                    + ": " + e.getMessage());
             return;
         }
 

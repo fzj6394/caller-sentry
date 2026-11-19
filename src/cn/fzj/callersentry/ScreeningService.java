@@ -40,6 +40,12 @@ public class ScreeningService extends CallScreeningService {
         // 先记账：哪怕后面抛异常，也能证明系统确实把电话交过来了
         touch(details);
         try {
+            Uri h = details.getHandle();
+            Trace.add(this, "call", "进入 dir=" + details.getCallDirection()
+                    + " handle=" + (h == null ? "null" : h.getSchemeSpecificPart()));
+        } catch (Throwable ignored) {
+        }
+        try {
             if (details.getCallDirection() != Call.Details.DIRECTION_INCOMING) {
                 respondToCall(details, new CallResponse.Builder().build());
                 return;
@@ -100,6 +106,8 @@ public class ScreeningService extends CallScreeningService {
             respondToCall(details, b.build());
             responded = true;
             final long tResp = System.nanoTime();
+            Trace.add(this, "respond", ms(t0, tResp) + "ms rejected=" + rejected
+                    + " silenced=" + silenced);
 
             // ---------- 3. 归属地：库没加载完就不等 ----------
             PhoneLookup lib = PhoneLookup.peek();
@@ -146,6 +154,7 @@ public class ScreeningService extends CallScreeningService {
                 onlineAsync(digits, area);
             }
         } catch (Throwable t) {
+            Trace.add(this, "error", t.getClass().getSimpleName() + ": " + t.getMessage());
             if (!responded) {
                 try {
                     respondToCall(details, new CallResponse.Builder().build());
@@ -223,10 +232,17 @@ public class ScreeningService extends CallScreeningService {
 
     private void show(String digits, String area, String mark, boolean warn) {
         String[] l = lines(digits, area, mark);
-        if (Prefs.overlayOn(this) && Overlay.canDraw(this)) {
+        boolean ovOn = Prefs.overlayOn(this);
+        boolean ovOk = Overlay.canDraw(this);
+        boolean ntOn = Prefs.notifyOn(this);
+        boolean ntOk = Notify.allowed(this);
+        Trace.add(this, "show", "overlayOn=" + ovOn + " 权限=" + ovOk
+                + " notifyOn=" + ntOn + " 通知允许=" + ntOk
+                + " 内容=" + l[0] + " / " + l[1]);
+        if (ovOn && ovOk) {
             Overlay.show(this, l[0], l[1], warn);
         }
-        if (Prefs.notifyOn(this)) {
+        if (ntOn) {
             Notify.show(this, l[0], l[1]);
         }
     }
