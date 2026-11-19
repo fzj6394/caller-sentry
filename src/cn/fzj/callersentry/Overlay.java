@@ -2,30 +2,25 @@ package cn.fzj.callersentry;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.text.TextUtils;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 /**
- * 来电时压一条提示。
+ * 来电时压一条提示（解锁状态用）。
  *
- * 设计（v2.7.3 起）：
- * - 无描边，只有一层低透明度的深色底，靠留白和字重分级说话；
- * - 三级文字：小字距标签（来电 / 快递 / 疑似骚扰）→ 主行（归属地）→ 带字距的号码；
- * - 全部左对齐，两侧各留 18dp，不再把三行居中堆成一张小标签；
- * - 命中号码库不铺红，只染标签和主行，底仍是深灰玻璃。
+ * 设计：
+ * - 一层低透明度深色底，无描边；三行文字居中；
+ * - 文字用 GlowView 自己画，色带高饱和、首尾同色循环，任意一帧都带颜色；
+ * - 命中号码库只染色带，不整块铺红。
  *
  * 这里必须有一层底色：悬浮条画在别人的界面（来电全屏页）之上，
- * 白字直接压在亮色背景上会糊。锁屏卡片有整屏压暗，那边可以不要底色。
+ * 亮色文字直接压在亮色背景上会糊。锁屏卡片有整屏压暗，那边可以不要底色。
  *
  * addView 必须在有 Looper 的线程上跑，而 onScreenCall 是 binder 线程，
  * 所以统一 post 到主线程。
@@ -33,11 +28,9 @@ import android.widget.TextView;
 public final class Overlay {
 
     private static View current;
-    private static TextView overView;
-    private static TextView titleView;
-    private static GlowText glowView;
-    private static GlowText subGlow;
-    private static TextView subView;
+    private static GlowView overView;
+    private static GlowView titleView;
+    private static GlowView subView;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static Runnable pendingHide;
 
@@ -49,8 +42,8 @@ public final class Overlay {
     }
 
     private static int dp(Context c, float v) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
-                c.getResources().getDisplayMetrics());
+        return (int) android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics());
     }
 
     public static void show(Context ctx, String line1, String line2, boolean warn) {
@@ -94,18 +87,18 @@ public final class Overlay {
         LinearLayout box = new LinearLayout(c);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER_HORIZONTAL);
-        box.setPadding(dp(c, 18), dp(c, 13), dp(c, 18), dp(c, 14));
+        box.setPadding(dp(c, 18), dp(c, 14), dp(c, 18), dp(c, 15));
 
-        // 无描边的一层深色玻璃：透出底下的来电界面，又不至于把字糊掉
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(warn ? 0x8F1C100E : 0x8F0B1220);
+        bg.setColor(0xA60B1220);
         bg.setCornerRadius(dp(c, 20));
         box.setBackground(bg);
         box.setElevation(dp(c, 10));
 
         if (overline != null && overline.length() > 0) {
-            GlowText over = glow(c, overline, 11, 0xB3, warn, 0.66f);
-            over.setLetterSpacing(0.26f);
+            GlowView over = new GlowView(c);
+            over.text(overline).sizeSp(11).colors(palette(warn, 0xCC)).setPhase(0.66f);
+            over.letterSpacing(0.26f);
             over.setPadding(0, 0, 0, dp(c, 5));
             box.addView(over);
             overView = over;
@@ -113,21 +106,22 @@ public final class Overlay {
             overView = null;
         }
 
-        GlowText title = glow(c, line1, 18, 0xFF, warn, 0f);
-        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        title.marquee(true);
+        GlowView title = new GlowView(c);
+        title.text(line1).sizeSp(19).colors(palette(warn, 0xFF)).setPhase(0f);
+        title.bold(true);
         title.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         box.addView(title);
         titleView = title;
-        glowView = title;
 
-        GlowText sub = glow(c, line2, 12.5f, 0xE6, warn, 0.42f);
-        sub.setLetterSpacing(0.10f);
+        GlowView sub = new GlowView(c);
+        sub.text(line2).sizeSp(12.5f).colors(palette(warn, 0xEE)).setPhase(0.45f);
+        sub.letterSpacing(0.10f);
         sub.setPadding(0, dp(c, 4), 0, 0);
+        sub.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         box.addView(sub);
         subView = sub;
-        subGlow = sub;
 
         int screenW = c.getResources().getDisplayMetrics().widthPixels;
         int width = Math.min(screenW - dp(c, 64), dp(c, 300));
@@ -147,8 +141,9 @@ public final class Overlay {
         try {
             wm.addView(box, lp);
             current = box;
-            if (glowView != null) glowView.startGlow(glowView.phase());
-            if (subGlow != null) subGlow.startGlow(subGlow.phase());
+            if (overView != null) overView.startGlow(overView.phase());
+            if (titleView != null) titleView.startGlow(titleView.phase());
+            if (subView != null) subView.startGlow(subView.phase());
             Trace.add(c, "overlay", "addView 成功：" + line1);
         } catch (Throwable e) {
             Trace.add(c, "overlay", "addView 失败 " + e.getClass().getSimpleName()
@@ -157,7 +152,6 @@ public final class Overlay {
             overView = null;
             titleView = null;
             subView = null;
-            glowView = null;
             return;
         }
 
@@ -172,27 +166,15 @@ public final class Overlay {
         MAIN.postDelayed(pendingHide, delay);
     }
 
-    /** 一行居中、带流光的文字 */
-    private static GlowText glow(Context c, String text, float sp, int alpha,
-                                 boolean warn, float phase) {
-        GlowText tv = new GlowText(c);
-        tv.setText(text);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        tv.setGravity(Gravity.CENTER);
-        tv.setMaxLines(1);
-        tv.colors(palette(warn, alpha));
-        tv.setPhase(phase);
-        tv.setShadowLayer(dp(c, 6), 0, dp(c, 1), 0x59000000);
-        return tv;
-    }
-
-    /** 一条色带：正常冰蓝/浅紫/薄荷，骚扰走暖红系 */
+    /** 一条高饱和色带，首尾同色，REPEAT 循环无接缝 */
     private static int[] palette(boolean warn, int alpha) {
         int a = (alpha & 0xFF) << 24;
         if (warn) {
-            return new int[]{a | 0xFFCFC2, a | 0xFF8F73, a | 0xFF7FA2, a | 0xFFA96B, a | 0xFFCFC2};
+            return new int[]{a | 0xFFE0D2, a | 0xFF7A45, a | 0xFF4E8A,
+                    a | 0xFFB324, a | 0xFF7A45, a | 0xFFE0D2};
         }
-        return new int[]{a | 0xF2FAFF, a | 0x7FD8FF, a | 0xC0A6FF, a | 0x7FF0CE, a | 0xF2FAFF};
+        return new int[]{a | 0xFFFFFF, a | 0x3FE0FF, a | 0x9B8CFF,
+                a | 0xFF7FD0, a | 0x4BFFC4, a | 0xFFFFFF};
     }
 
     private static void cancelPendingHide() {
@@ -213,21 +195,25 @@ public final class Overlay {
     }
 
     private static void hideNow() {
-        if (current == null) return;
+        if (titleView != null) titleView.stopGlow();
+        if (overView != null) overView.stopGlow();
+        if (subView != null) subView.stopGlow();
+        if (current == null) {
+            overView = null;
+            titleView = null;
+            subView = null;
+            return;
+        }
         try {
             WindowManager wm = (WindowManager) current.getContext()
                     .getSystemService(Context.WINDOW_SERVICE);
             if (wm != null) wm.removeView(current);
         } catch (Throwable ignored) {
         }
-        if (glowView != null) glowView.stopGlow();
-        if (subGlow != null) subGlow.stopGlow();
         current = null;
         overView = null;
         titleView = null;
         subView = null;
-        glowView = null;
-        subGlow = null;
     }
 
     /** 归属地算出来得晚一点时（冷启动），先把号码显示出来，回头把文字补上。 */
@@ -241,10 +227,10 @@ public final class Overlay {
             public void run() {
                 try {
                     if (overView != null && overline != null && overline.length() > 0) {
-                        overView.setText(overline);
+                        overView.text(overline);
                     }
-                    if (titleView != null && line1 != null) titleView.setText(line1);
-                    if (subView != null && line2 != null) subView.setText(line2);
+                    if (titleView != null && line1 != null) titleView.text(line1);
+                    if (subView != null && line2 != null) subView.text(line2);
                 } catch (Throwable ignored) {
                 }
             }

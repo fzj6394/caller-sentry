@@ -57,7 +57,7 @@ CNT=0
 for cls in App MainActivity ScreeningService PhoneLookup Update MarkCache OnlineLookup \
            Yellow YellowStore Ui UiTheme BasePageActivity RulesActivity SourcesActivity \
            AppearanceActivity RecordsActivity CallerIdProvider Notify Blacklist LogStore Timing Overlay NumUtil Prefs \
-           Trace Watcher Boot Tags CallCardActivity GlowText; do
+           Trace Watcher Boot Tags CallCardActivity GlowView; do
     CNT=$((CNT + 1))
     if [ ! -f "$OUT/classes/cn/fzj/callersentry/$cls.class" ]; then
         echo "!! 缺少编译产物：$cls.class"

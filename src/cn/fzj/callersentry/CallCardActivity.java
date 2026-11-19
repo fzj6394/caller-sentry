@@ -8,7 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -16,7 +15,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.telephony.TelephonyManager;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,7 +22,6 @@ import android.view.WindowManager;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 /**
  * 锁屏来电提示。
@@ -33,10 +30,11 @@ import android.widget.TextView;
  * addView 依然返回成功，但用户什么都看不到。锁屏上唯一能显示内容的通道是 Activity——
  * 带 setShowWhenLocked(true) 的透明页面可以画在锁屏之上。
  *
- * 设计（v2.7.5 起）：
- * - 不画卡片、不画描边，三行文字居中，全部渐变流光；
- * - 整个文字块在屏幕上左右往返移动（经典跑马灯），到边界缓停再折回；
- * - 号码也跟着流光，相位错开，三行不同步才自然。
+ * 设计（v2.7.7 起）：
+ * - 不画卡片、不画描边，三行文字居中；
+ * - 文字用 GlowView 自己画（不走 TextView，避免 shader 被内部重置成白字），
+ *   色带高饱和、首尾同色循环，任意一帧都带颜色；
+ * - 整个文字块在屏幕上左右往返移动。
  *
  * 收起：接听（OFFHOOK）、挂断（IDLE）、轻点、或 120 秒兜底。
  */
@@ -45,9 +43,9 @@ public class CallCardActivity extends Activity {
     private static volatile CallCardActivity alive;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    private GlowText overView;
-    private GlowText titleView;
-    private GlowText subView;
+    private GlowView overView;
+    private GlowView titleView;
+    private GlowView subView;
     private ObjectAnimator travel;
     private View block;
     private BroadcastReceiver rx;
@@ -92,10 +90,10 @@ public class CallCardActivity extends Activity {
                 if (a == null) return;
                 try {
                     if (a.overView != null && overline != null && overline.length() > 0) {
-                        a.overView.setText(overline);
+                        a.overView.text(overline);
                     }
-                    if (a.titleView != null && line1 != null) a.titleView.setText(line1);
-                    if (a.subView != null && line2 != null) a.subView.setText(line2);
+                    if (a.titleView != null && line1 != null) a.titleView.text(line1);
+                    if (a.subView != null && line2 != null) a.subView.text(line2);
                 } catch (Throwable ignored) {
                 }
             }
@@ -141,16 +139,13 @@ public class CallCardActivity extends Activity {
             boolean warn = intent.getBooleanExtra("warn", false);
             String over = intent.getStringExtra("over");
             if (overView != null && over != null && over.length() > 0) {
-                overView.setText(over);
-                overView.colors(palette(warn, 0xB3));
+                overView.text(over).colors(palette(warn, 0xCC));
             }
             if (titleView != null) {
-                titleView.setText(intent.getStringExtra("l1"));
-                titleView.colors(palette(warn, 0xFF));
+                titleView.text(intent.getStringExtra("l1")).colors(palette(warn, 0xFF));
             }
             if (subView != null) {
-                subView.setText(intent.getStringExtra("l2"));
-                subView.colors(palette(warn, 0xE6));
+                subView.text(intent.getStringExtra("l2")).colors(palette(warn, 0xEE));
             }
             MAIN.removeCallbacks(autoClose);
             MAIN.postDelayed(autoClose, 120_000L);
@@ -167,10 +162,10 @@ public class CallCardActivity extends Activity {
         if (l2 == null) l2 = "";
 
         FrameLayout root = new FrameLayout(this);
-        // 顶部略压暗、往下渐隐：白字在任何壁纸上都有底，又不至于把锁屏压黑
+        // 顶部略压暗、往下渐隐：亮色文字在任何壁纸上都有底，又不至于把锁屏压黑
         GradientDrawable scrim = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x8C000000, 0x4D000000, 0x00000000});
+                new int[]{0x99000000, 0x4D000000, 0x00000000});
         root.setBackground(scrim);
         root.setClickable(true);
         root.setOnClickListener(new View.OnClickListener() {
@@ -180,9 +175,7 @@ public class CallCardActivity extends Activity {
             }
         });
 
-        final int screenW = getResources().getDisplayMetrics().widthPixels;
         final int screenH = getResources().getDisplayMetrics().heightPixels;
-        int maxTextW = screenW - dp(40);
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -196,18 +189,18 @@ public class CallCardActivity extends Activity {
         });
 
         if (over != null && over.length() > 0) {
-            overView = glowText(over, 11, 0xB3, warn, 0.66f, maxTextW);
-            overView.setLetterSpacing(0.30f);
-            overView.setPadding(0, 0, 0, dp(6));
+            overView = glow(over, 11, 0xCC, warn, 0.66f);
+            overView.letterSpacing(0.30f);
+            overView.setPadding(0, 0, 0, dp(7));
             box.addView(overView);
         }
 
-        titleView = glowText(l1, 22, 0xFF, warn, 0f, maxTextW);
-        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        titleView = glow(l1, 23, 0xFF, warn, 0f);
+        titleView.bold(true);
         box.addView(titleView);
 
-        subView = glowText(l2, 13, 0xE6, warn, 0.42f, maxTextW);
-        subView.setLetterSpacing(0.12f);
+        subView = glow(l2, 13.5f, 0xEE, warn, 0.45f);
+        subView.letterSpacing(0.12f);
         subView.setPadding(0, dp(7), 0, 0);
         box.addView(subView);
 
@@ -222,28 +215,24 @@ public class CallCardActivity extends Activity {
         return root;
     }
 
-    /** 一行会流光的居中文字 */
-    private GlowText glowText(String text, float sp, int alpha, boolean warn,
-                              float phase, int maxWidth) {
-        GlowText tv = new GlowText(this);
-        tv.setText(text);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        tv.setGravity(Gravity.CENTER);
-        tv.colors(palette(warn, alpha));
-        tv.marquee(false);
-        tv.setMaxWidth(maxWidth);
-        tv.setShadowLayer(dp(9), 0, dp(1), 0x8C000000);
-        tv.setPhase(phase);
-        return tv;
+    private GlowView glow(String text, float sp, int alpha, boolean warn, float phase) {
+        GlowView v = new GlowView(this);
+        v.text(text).sizeSp(sp).colors(palette(warn, alpha)).setPhase(phase);
+        return v;
     }
 
-    /** 一条色带：正常冰蓝/浅紫/薄荷，骚扰走暖红系；alpha 控制这一行的存在感 */
+    /**
+     * 一条高饱和色带，首尾同色 —— REPEAT 循环时接缝看不出来。
+     * 正常来电走冰蓝/紫/玫红/薄荷，命中号码库走橙红/玫红/琥珀。
+     */
     private int[] palette(boolean warn, int alpha) {
         int a = (alpha & 0xFF) << 24;
         if (warn) {
-            return new int[]{a | 0xFFCFC2, a | 0xFF8F73, a | 0xFF7FA2, a | 0xFFA96B, a | 0xFFCFC2};
+            return new int[]{a | 0xFFE0D2, a | 0xFF7A45, a | 0xFF4E8A,
+                    a | 0xFFB324, a | 0xFF7A45, a | 0xFFE0D2};
         }
-        return new int[]{a | 0xF2FAFF, a | 0x7FD8FF, a | 0xC0A6FF, a | 0x7FF0CE, a | 0xF2FAFF};
+        return new int[]{a | 0xFFFFFF, a | 0x3FE0FF, a | 0x9B8CFF,
+                a | 0xFF7FD0, a | 0x4BFFC4, a | 0xFFFFFF};
     }
 
     @Override
@@ -355,7 +344,8 @@ public class CallCardActivity extends Activity {
     }
 
     private int dp(float v) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
+        return (int) android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_DIP, v,
                 getResources().getDisplayMetrics());
     }
 }
