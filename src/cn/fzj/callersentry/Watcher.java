@@ -29,6 +29,8 @@ public class Watcher extends Service {
 
     private BroadcastReceiver rx;
 
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+
     private static volatile boolean running;
 
     public static void start(Context c) {
@@ -148,6 +150,7 @@ public class Watcher extends Service {
                 if (TelephonyManager.EXTRA_STATE_OFFHOOK.equals(state)
                         || TelephonyManager.EXTRA_STATE_IDLE.equals(state)) {
                     Overlay.hide();
+                    CallCardActivity.dismiss();
                 }
                 return;
             }
@@ -186,6 +189,7 @@ public class Watcher extends Service {
                             if (a != null && a.length() > 0) {
                                 String[] l = lines(digits, a, mark);
                                 Overlay.update(l[0], l[1]);
+                                CallCardActivity.update(l[0], l[1]);
                                 Trace.add(Watcher.this, "watcher", "归属地补齐 " + a);
                             }
                         } catch (Throwable ignored) {
@@ -195,6 +199,17 @@ public class Watcher extends Service {
             }
         } catch (Throwable t) {
             Trace.add(this, "watcher", "处理失败 " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    /** 现在是否在锁屏上：锁屏要换一种显示方式 */
+    private boolean keyguardLocked() {
+        try {
+            android.app.KeyguardManager km = (android.app.KeyguardManager)
+                    getSystemService(KEYGUARD_SERVICE);
+            return km != null && km.isKeyguardLocked();
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -249,11 +264,28 @@ public class Watcher extends Service {
         boolean ovOn = Prefs.overlayOn(this);
         boolean ovOk = Overlay.canDraw(this);
         boolean ntOn = Prefs.notifyOn(this);
+        boolean locked = keyguardLocked();
         Trace.add(this, "watcher", "显示 " + l[0] + " / " + l[1]
-                + " · 悬浮窗=" + (ovOn && ovOk) + " 通知=" + ntOn);
-        // holdMs = 0：不按时间收，等接听/挂断的状态变化再收
-        if (ovOn && ovOk) Overlay.show(this, l[0], l[1], Tags.warn(mark), 0);
-        if (ntOn) Notify.show(this, l[0], l[1]);
+                + " · 悬浮窗=" + (ovOn && ovOk) + " 通知=" + ntOn
+                + " 锁屏=" + locked);
+        // 锁屏上 TYPE_APPLICATION_OVERLAY 会被系统整体隐藏（addView 成功也看不见），
+        // 只能改用能覆盖锁屏的 Activity；解锁状态仍走悬浮条，不动用户正在看的界面。
+        if (locked) {
+            CallCardActivity.show(this, l[0], l[1], Tags.warn(mark));
+            // 拨号器的来电界面可能比我们晚一步起来、把卡片盖住，隔一会儿再顶一次
+            final String c1 = l[0], c2 = l[1];
+            final boolean cw = Tags.warn(mark);
+            ui.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (keyguardLocked()) CallCardActivity.show(Watcher.this, c1, c2, cw);
+                }
+            }, 1200);
+        } else if (ovOn && ovOk) {
+            // holdMs = 0：不按时间收，等接听/挂断的状态变化再收
+            Overlay.show(this, l[0], l[1], Tags.warn(mark), 0);
+        }
+        if (ntOn) Notify.show(this, l[0], l[1], Tags.warn(mark));
         try {
             LogStore.add(this, digits, area, mark == null ? "兼容模式·提示" : "兼容模式·" + mark);
         } catch (Throwable ignored) {

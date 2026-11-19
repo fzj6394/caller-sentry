@@ -40,7 +40,38 @@ public final class Notify {
         }
     }
 
+    /** 锁屏才挂全屏意图：解锁状态下挂它，部分 ROM 会直接把 Activity 顶上来 */
+    private static boolean keyguardLocked(Context c) {
+        try {
+            android.app.KeyguardManager km = (android.app.KeyguardManager)
+                    c.getSystemService(Context.KEYGUARD_SERVICE);
+            return km != null && km.isKeyguardLocked();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** Android 14 起全屏意图需要单独授权，没授权就只能退化成横幅 */
+    public static boolean canFullScreen(NotificationManager nm) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 34) return nm.canUseFullScreenIntent();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static void show(Context c, String title, String text) {
+        show(c, title, text, false);
+    }
+
+    /**
+     * @param warn 命中号码库时为 true，锁屏卡片的配色要跟着变
+     *
+     * 顺带挂一条全屏意图：屏幕锁着时系统会把来电卡片直接顶到锁屏之上，
+     * 这是在"后台启动 Activity 被限制"时唯一的兜底通道。
+     */
+    public static void show(Context c, String title, String text, boolean warn) {
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) {
@@ -53,7 +84,18 @@ public final class Notify {
             PendingIntent pi = PendingIntent.getActivity(c, 0, open,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-            Notification n = new Notification.Builder(c, CHANNEL)
+            Intent card = new Intent(c, CallCardActivity.class)
+                    .putExtra("l1", title)
+                    .putExtra("l2", text)
+                    .putExtra("warn", warn)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_NO_ANIMATION
+                            | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+            PendingIntent fsi = PendingIntent.getActivity(c, 1, card,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            boolean locked = keyguardLocked(c);
+            Notification.Builder b = new Notification.Builder(c, CHANNEL)
                     .setSmallIcon(R.drawable.ic_stat)
                     .setContentTitle(title)
                     .setContentText(text)
@@ -63,10 +105,12 @@ public final class Notify {
                     .setCategory(Notification.CATEGORY_CALL)
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setWhen(System.currentTimeMillis())
-                    .setShowWhen(true)
-                    .build();
+                    .setShowWhen(true);
+            if (locked) b.setFullScreenIntent(fsi, true);
+            Notification n = b.build();
             nm.notify(1001, n);
-            Trace.add(c, "notify", "已发出：" + title + " / " + text);
+            Trace.add(c, "notify", "已发出：" + title + " / " + text
+                    + (locked ? (canFullScreen(nm) ? "（锁屏·含全屏意图）" : "（锁屏·全屏意图未授权）") : ""));
         } catch (Throwable e) {
             Trace.add(c, "notify", "发送失败 " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());

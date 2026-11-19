@@ -139,8 +139,9 @@ public class RecordsActivity extends BasePageActivity {
         card.addView(open);
 
         TextView hint = Ui.sub(this, t,
-                "点按钮，屏幕上方会出现 7 秒提示，样式与真实来电一致。"
-                        + "真来电时会一直显示到接听或挂断，不会提前消失。");
+                "点按钮，屏幕上方会出现 7 秒提示，样式与真实来电一致；"
+                        + "真来电时会一直显示到接听或挂断。\n"
+                        + "锁屏来电走另一套：系统会隐藏悬浮层，改用能覆盖锁屏的卡片。");
         hint.setPadding(0, Ui.dp(this, 10), 0, 0);
         card.addView(hint);
 
@@ -188,6 +189,23 @@ public class RecordsActivity extends BasePageActivity {
         });
         btns.addView(note);
         card.addView(btns);
+
+        LinearLayout btns2 = new LinearLayout(this);
+        btns2.setOrientation(LinearLayout.HORIZONTAL);
+        btns2.setPadding(0, Ui.dp(this, 8), 0, 0);
+
+        TextView lock = Ui.pill(this, t, "锁屏卡片", false);
+        lock.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                CallCardActivity.show(RecordsActivity.this,
+                        "哈尔滨 · 移动", "158 4661 0296", false);
+                toast("锁屏后再来一次，就能看到它在锁屏上的样子");
+            }
+        });
+        btns2.addView(lock);
+        card.addView(btns2);
+
         return card;
     }
 

@@ -5,4 +5,15 @@
         <item name="android:colorAccent">#1F6FEB</item>
         <item name="android:windowBackground">#FFFFFF</item>
     </style>
+
+    <!-- 锁屏来电卡片：透明、无动画；压暗由内容层自己画，避免遮住系统来电界面 -->
+    <style name="CallCardTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
 </resources>
