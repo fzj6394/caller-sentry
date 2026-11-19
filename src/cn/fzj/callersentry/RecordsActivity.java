@@ -44,11 +44,11 @@ public class RecordsActivity extends BasePageActivity {
         llp.topMargin = Ui.dp(this, 12);
         logBtns.setLayoutParams(llp);
 
-        TextView tagBtn = Ui.pill(this, t, "标记号码", true);
+        TextView tagBtn = Ui.pill(this, t, "选号码标记", true);
         tagBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                askNumberThenTag();
+                pickNumber();
             }
         });
         logBtns.addView(tagBtn);
@@ -845,18 +845,34 @@ public class RecordsActivity extends BasePageActivity {
         int n = Math.min(logs.size(), 40);
         for (int i = 0; i < n; i++) {
             final String line = logs.get(i);
-            TextView tv = Ui.text(this, t, line, 12, t.text);
-            tv.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
             final String num = numberFrom(line);
+            String tag = num.length() >= 3 ? Tags.get(this, num) : null;
+            String text = tag == null ? line : line + "　· " + tag;
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            TextView tv = Ui.text(this, t, text, 12, t.text);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            tv.setLayoutParams(tlp);
+            tv.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+            row.addView(tv);
+
             if (num.length() >= 3) {
-                tv.setOnClickListener(new View.OnClickListener() {
+                TextView chip = Ui.pill(this, t, tag == null ? "标记" : "改标记", false);
+                View.OnClickListener open = new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
                         askTag(num);
                     }
-                });
+                };
+                chip.setOnClickListener(open);
+                tv.setOnClickListener(open);
+                row.addView(chip);
             }
-            logBox.addView(tv);
+            logBox.addView(row);
             if (i < n - 1) logBox.addView(Ui.divider(this, t));
         }
         if (logs.size() > n) {
@@ -864,7 +880,7 @@ public class RecordsActivity extends BasePageActivity {
             more.setPadding(0, Ui.dp(this, 8), 0, 0);
             logBox.addView(more);
         }
-        TextView tip = Ui.sub(this, t, "点任意一条可以给这个号码打标签，下次来电直接显示");
+        TextView tip = Ui.sub(this, t, "点右侧「标记」选快递/外卖，下次来电直接显示");
         tip.setPadding(0, Ui.dp(this, 10), 0, 0);
         logBox.addView(tip);
     }
@@ -880,6 +896,70 @@ public class RecordsActivity extends BasePageActivity {
         } catch (Throwable ignored) {
         }
         return "";
+    }
+
+    /** 从通话记录里挑号码，挑完直接选标签，不用手打 */
+    private void pickNumber() {
+        boolean granted = true;
+        try {
+            granted = checkSelfPermission(android.Manifest.permission.READ_CALL_LOG)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        } catch (Throwable ignored) {
+        }
+        if (!granted) {
+            toast("需要「通话记录」权限才能列出号码");
+            requestPermissions(new String[]{"android.permission.READ_CALL_LOG"}, 301);
+            return;
+        }
+
+        final java.util.List<String> nums = new java.util.ArrayList<String>();
+        final java.util.List<String> items = new java.util.ArrayList<String>();
+        try {
+            android.database.Cursor cu = getContentResolver().query(
+                    android.provider.CallLog.Calls.CONTENT_URI,
+                    new String[]{android.provider.CallLog.Calls.NUMBER,
+                            android.provider.CallLog.Calls.CACHED_NAME},
+                    null, null,
+                    android.provider.CallLog.Calls.DATE + " DESC");
+            if (cu != null) {
+                java.util.HashSet<String> seen = new java.util.HashSet<String>();
+                while (cu.moveToNext() && nums.size() < 20) {
+                    String d = NumUtil.clean(cu.getString(0));
+                    if (d.length() < 3 || !seen.add(d)) continue;
+                    String name = cu.getString(1);
+                    String tag = Tags.get(this, d);
+                    StringBuilder sb = new StringBuilder(d);
+                    if (name != null && name.length() > 0) sb.append("（").append(name).append("）");
+                    if (tag != null) sb.append("　已标 · ").append(tag);
+                    nums.add(d);
+                    items.add(sb.toString());
+                }
+                cu.close();
+            }
+        } catch (Throwable ignored) {
+        }
+
+        if (nums.isEmpty()) {
+            toast("通话记录里没有号码，可以手动输入");
+            askNumberThenTag();
+            return;
+        }
+
+        items.add(0, "手动输入号码…");
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("选择要标记的号码")
+                .setItems(items.toArray(new String[0]),
+                        new android.content.DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(android.content.DialogInterface d, int which) {
+                                if (which == 0) {
+                                    askNumberThenTag();
+                                } else {
+                                    askTag(nums.get(which - 1));
+                                }
+                            }
+                        })
+                .show();
     }
 
     private void askNumberThenTag() {
